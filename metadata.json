@@ -1,0 +1,6 @@
+{
+  "name": "SIMPEL SARPRAS SMA Negeri 1 Tejakula",
+  "description": "Sistem Pelaporan Kerusakan, Peminjaman & Pengembalian Barang Sarpras SMA Negeri 1 Tejakula",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
