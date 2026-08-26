@@ -1,5 +1,6 @@
 import { DamageReport, ItemLoan, ItemReturn, AppConfig, ActivityLog, DamageStatus, LoanStatus } from '../types';
 import { INITIAL_CONFIG, INITIAL_DAMAGE_REPORTS, INITIAL_LOANS, INITIAL_RETURNS } from '../data/initialData';
+import { FirebaseService } from './firebaseService';
 
 const STORAGE_KEYS = {
   CONFIG: 'simpel_sarpras_config_v1',
@@ -52,11 +53,19 @@ export const StorageService = {
     }
   },
 
-  saveDamageReport(report: Omit<DamageReport, 'id' | 'timestamp' | 'tanggalLapor' | 'status'> & { id?: string }): DamageReport {
+  setDamageReports(reports: DamageReport[]): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.DAMAGE, JSON.stringify(reports));
+    } catch (e) {
+      console.error('Failed to save damage reports', e);
+    }
+  },
+
+  saveDamageReport(report: Omit<DamageReport, 'id' | 'timestamp' | 'status'> & { id?: string }): DamageReport {
     const list = this.getDamageReports();
     const dateStr = getDateStringForId();
     
-    // Count today's items to make sequence number 001, 002, etc.
+    // Generate sequential ID for today
     const todayReports = list.filter(r => r.id.startsWith(`KR-${dateStr}`));
     const seq = String(todayReports.length + 1).padStart(3, '0');
     const newId = report.id || `KR-${dateStr}-${seq}`;
@@ -65,15 +74,18 @@ export const StorageService = {
       ...report,
       id: newId,
       timestamp: new Date().toISOString(),
-      tanggalLapor: getTodayISODate(),
       status: 'DILAPORKAN',
     };
 
-    const updated = [newReport, ...list];
+    const updated = [newReport, ...list.filter(r => r.id !== newId)];
     localStorage.setItem(STORAGE_KEYS.DAMAGE, JSON.stringify(updated));
 
-    // Try background sync if configured
-    this.triggerAutoSync('submit_kerusakan', newReport);
+    // Save directly to Firebase Firestore
+    if (FirebaseService.isConfigured()) {
+      FirebaseService.saveDamageReport(newReport).catch(err => {
+        console.warn('Firestore write failed for damage report:', err);
+      });
+    }
 
     return newReport;
   },
@@ -93,8 +105,24 @@ export const StorageService = {
     list[index] = updatedItem;
     localStorage.setItem(STORAGE_KEYS.DAMAGE, JSON.stringify(list));
 
-    this.triggerAutoSync('update_kerusakan_status', updatedItem);
+    if (FirebaseService.isConfigured()) {
+      FirebaseService.updateDamageReport(id, {
+        status: updatedItem.status,
+        catatanPetugas: updatedItem.catatanPetugas,
+        tanggalSelesai: updatedItem.tanggalSelesai,
+      }).catch(err => console.warn('Firestore update failed:', err));
+    }
+
     return updatedItem;
+  },
+
+  deleteDamageReport(id: string): void {
+    const list = this.getDamageReports().filter(r => r.id !== id);
+    localStorage.setItem(STORAGE_KEYS.DAMAGE, JSON.stringify(list));
+
+    if (FirebaseService.isConfigured()) {
+      FirebaseService.deleteDamageReport(id).catch(err => console.warn('Firestore delete failed:', err));
+    }
   },
 
   getLoans(): ItemLoan[] {
@@ -103,6 +131,14 @@ export const StorageService = {
       return data ? JSON.parse(data) : INITIAL_LOANS;
     } catch {
       return INITIAL_LOANS;
+    }
+  },
+
+  setLoans(loans: ItemLoan[]): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.LOANS, JSON.stringify(loans));
+    } catch (e) {
+      console.error('Failed to save loans', e);
     }
   },
 
@@ -121,10 +157,16 @@ export const StorageService = {
       status: 'MENUNGGU',
     };
 
-    const updated = [newLoan, ...list];
+    const updated = [newLoan, ...list.filter(l => l.id !== newId)];
     localStorage.setItem(STORAGE_KEYS.LOANS, JSON.stringify(updated));
 
-    this.triggerAutoSync('submit_peminjaman', newLoan);
+    // Save directly to Firebase Firestore
+    if (FirebaseService.isConfigured()) {
+      FirebaseService.saveLoan(newLoan).catch(err => {
+        console.warn('Firestore write failed for loan:', err);
+      });
+    }
+
     return newLoan;
   },
 
@@ -143,8 +185,24 @@ export const StorageService = {
     list[index] = updatedItem;
     localStorage.setItem(STORAGE_KEYS.LOANS, JSON.stringify(list));
 
-    this.triggerAutoSync('update_peminjaman_status', updatedItem);
+    if (FirebaseService.isConfigured()) {
+      FirebaseService.updateLoan(id, {
+        status: updatedItem.status,
+        persetujuanOleh: updatedItem.persetujuanOleh,
+        tanggalDisetujui: updatedItem.tanggalDisetujui,
+      }).catch(err => console.warn('Firestore loan update failed:', err));
+    }
+
     return updatedItem;
+  },
+
+  deleteLoan(id: string): void {
+    const list = this.getLoans().filter(l => l.id !== id);
+    localStorage.setItem(STORAGE_KEYS.LOANS, JSON.stringify(list));
+
+    if (FirebaseService.isConfigured()) {
+      FirebaseService.deleteLoan(id).catch(err => console.warn('Firestore loan delete failed:', err));
+    }
   },
 
   getReturns(): ItemReturn[] {
@@ -153,6 +211,14 @@ export const StorageService = {
       return data ? JSON.parse(data) : INITIAL_RETURNS;
     } catch {
       return INITIAL_RETURNS;
+    }
+  },
+
+  setReturns(returns: ItemReturn[]): void {
+    try {
+      localStorage.setItem(STORAGE_KEYS.RETURNS, JSON.stringify(returns));
+    } catch (e) {
+      console.error('Failed to save returns', e);
     }
   },
 
@@ -171,26 +237,42 @@ export const StorageService = {
       status: 'SELESAI',
     };
 
-    const updatedReturns = [newReturn, ...list];
+    const updatedReturns = [newReturn, ...list.filter(r => r.id !== newId)];
     localStorage.setItem(STORAGE_KEYS.RETURNS, JSON.stringify(updatedReturns));
 
     // Also update the corresponding Loan status to 'SELESAI'
     if (returnItem.idPeminjaman) {
-      this.updateLoanStatus(returnItem.idPeminjaman, 'SELESAI');
+      this.updateLoanStatus(returnItem.idPeminjaman, 'SELESAI', 'Otomatis via Pengembalian');
     }
 
-    this.triggerAutoSync('submit_pengembalian', newReturn);
+    // Save directly to Firebase Firestore
+    if (FirebaseService.isConfigured()) {
+      FirebaseService.saveReturn(newReturn).catch(err => {
+        console.warn('Firestore write failed for return:', err);
+      });
+    }
+
     return newReturn;
   },
 
+  deleteReturn(id: string): void {
+    const list = this.getReturns().filter(r => r.id !== id);
+    localStorage.setItem(STORAGE_KEYS.RETURNS, JSON.stringify(list));
+
+    if (FirebaseService.isConfigured()) {
+      FirebaseService.deleteReturn(id).catch(err => console.warn('Firestore delete failed:', err));
+    }
+  },
+
+  // Compute live activity logs from reports, loans, returns
   getRecentActivities(): ActivityLog[] {
-    const damages = this.getDamageReports();
+    const damage = this.getDamageReports();
     const loans = this.getLoans();
     const returns = this.getReturns();
 
     const activities: ActivityLog[] = [];
 
-    damages.forEach(d => {
+    damage.forEach(d => {
       const date = new Date(d.timestamp);
       const timeFormatted = isNaN(date.getTime()) ? 'Baru saja' : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
       activities.push({
@@ -199,7 +281,7 @@ export const StorageService = {
         refId: d.id,
         timestamp: d.timestamp,
         timeFormatted,
-        title: `Laporan Kerusakan: ${d.namaSarana}`,
+        title: `Lapor Kerusakan: ${d.namaSarana}`,
         subtitle: `${d.detailLokasi || d.lokasi} • Oleh ${d.namaPelapor} (${d.statusPelapor})`,
         statusBadge: d.status,
         statusColor: d.status === 'SELESAI' ? 'bg-emerald-100 text-emerald-800' : d.status === 'DIPROSES' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800',
@@ -242,237 +324,21 @@ export const StorageService = {
     return activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10);
   },
 
-  async triggerAutoSync(action: string, data: any): Promise<boolean> {
-    const config = this.getConfig();
-    if (!config.appsScriptWebhookUrl) return false;
+  // Clear all local & remote data
+  async clearAllData(): Promise<void> {
+    localStorage.setItem(STORAGE_KEYS.DAMAGE, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.LOANS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.RETURNS, JSON.stringify([]));
 
-    try {
-      const res = await fetch('/api/google-sheets/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          webhookUrl: config.appsScriptWebhookUrl,
-          action,
-          data,
-        }),
-      });
-      const result = await res.json();
-      if (result.success) {
-        config.lastSyncedAt = new Date().toISOString();
-        this.saveConfig(config);
-        return true;
-      }
-      return false;
-    } catch {
-      return false;
+    if (FirebaseService.isConfigured()) {
+      await FirebaseService.clearAllFirestoreData();
     }
   },
 
-  async syncAllToGoogleSheets(): Promise<{ success: boolean; message: string }> {
-    const config = this.getConfig();
-    if (!config.appsScriptWebhookUrl) {
-      return {
-        success: false,
-        message: 'URL Webhook Google Apps Script belum dimasukkan. Silakan atur di Pengaturan Admin.',
-      };
-    }
-
-    const payload = {
-      kerusakan: this.getDamageReports(),
-      peminjaman: this.getLoans(),
-      pengembalian: this.getReturns(),
-      timestamp: new Date().toISOString(),
-    };
-
-    try {
-      const res = await fetch('/api/google-sheets/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          webhookUrl: config.appsScriptWebhookUrl,
-          action: 'sync_all',
-          data: payload,
-        }),
-      });
-
-      const result = await res.json();
-      if (result.success) {
-        config.lastSyncedAt = new Date().toISOString();
-        this.saveConfig(config);
-        return {
-          success: true,
-          message: 'Berhasil menyinkronkan seluruh data ke Google Sheets!',
-        };
-      } else {
-        return {
-          success: false,
-          message: result.message || 'Gagal mengirim data ke Google Sheets.',
-        };
-      }
-    } catch (e: any) {
-      return {
-        success: false,
-        message: 'Koneksi gagal: ' + (e.message || 'Periksa jaringan internet.'),
-      };
-    }
-  },
-
-  // Reset to default initial demo data
+  // Reset to clean empty database
   resetToInitialData(): void {
-    localStorage.setItem(STORAGE_KEYS.DAMAGE, JSON.stringify(INITIAL_DAMAGE_REPORTS));
-    localStorage.setItem(STORAGE_KEYS.LOANS, JSON.stringify(INITIAL_LOANS));
-    localStorage.setItem(STORAGE_KEYS.RETURNS, JSON.stringify(INITIAL_RETURNS));
-  },
-
-  // Generate Google Apps Script code for 1-click copy by Admin
-  getGoogleAppsScriptCode(): string {
-    return `/**
- * SIMPEL SARPRAS SMA NEGERI 1 TEJAKULA
- * Google Apps Script Web App Backend
- * 
- * CARA PEMASANGAN:
- * 1. Buka Google Spreadsheet "SIMPEL SARPRAS SMA Negeri 1 Tejakula"
- * 2. Buat 3 Sheet: "KERUSAKAN", "PEMINJAMAN", "PENGEMBALIAN"
- * 3. Buka menu Extensions (Ekstensi) > Apps Script
- * 4. Hapus semua kode, paste kode ini dan Simpan (Ctrl+S)
- * 5. Klik "Deploy" (Terapkan) > "New deployment" (Penerapan baru)
- * 6. Pilih tipe "Web app" (Aplikasi Web)
- * 7. Set:
- *    - Execute as: "Me" (Saya)
- *    - Who has access: "Anyone" (Siapa saja)
- * 8. Klik "Deploy", izinkan akses Google, lalu salin Web App URL ke aplikasi SIMPEL SARPRAS.
- */
-
-function setupSheets() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  
-  // 1. Sheet KERUSAKAN
-  var s1 = ss.getSheetByName("KERUSAKAN") || ss.insertSheet("KERUSAKAN");
-  if (s1.getLastRow() === 0) {
-    s1.appendRow([
-      "ID_LAPORAN", "TIMESTAMP", "NAMA_PELAPOR", "STATUS_PELAPOR", "KONTAK",
-      "LOKASI", "DETAIL_LOKASI", "NAMA_SARANA", "JENIS_KERUSAKAN", "DESKRIPSI",
-      "FOTO", "TANGGAL_LAPOR", "STATUS", "CATATAN_PETUGAS", "TANGGAL_SELESAI"
-    ]);
-    s1.getRange(1, 1, 1, 15).setFontWeight("bold").setBackground("#1e3a8a").setFontColor("#ffffff");
-  }
-
-  // 2. Sheet PEMINJAMAN
-  var s2 = ss.getSheetByName("PEMINJAMAN") || ss.insertSheet("PEMINJAMAN");
-  if (s2.getLastRow() === 0) {
-    s2.appendRow([
-      "ID_PEMINJAMAN", "TIMESTAMP", "NAMA_PEMINJAM", "STATUS_PEMINJAM", "KELAS_UNIT",
-      "KONTAK", "NAMA_BARANG", "JUMLAH", "KEPERLUAN", "TANGGAL_PINJAM",
-      "TANGGAL_RENCANA_KEMBALI", "CATATAN", "STATUS"
-    ]);
-    s2.getRange(1, 1, 1, 13).setFontWeight("bold").setBackground("#0284c7").setFontColor("#ffffff");
-  }
-
-  // 3. Sheet PENGEMBALIAN
-  var s3 = ss.getSheetByName("PENGEMBALIAN") || ss.insertSheet("PENGEMBALIAN");
-  if (s3.getLastRow() === 0) {
-    s3.appendRow([
-      "ID_PENGEMBALIAN", "ID_PEMINJAMAN", "TIMESTAMP", "NAMA_PEMINJAM", "NAMA_BARANG",
-      "JUMLAH", "TANGGAL_PINJAM", "TANGGAL_RENCANA_KEMBALI", "TANGGAL_PENGEMBALIAN",
-      "KONDISI_BARANG", "CATATAN", "FOTO", "STATUS"
-    ]);
-    s3.getRange(1, 1, 1, 13).setFontWeight("bold").setBackground("#059669").setFontColor("#ffffff");
-  }
-}
-
-function doPost(e) {
-  try {
-    var data = JSON.parse(e.postData.contents);
-    var action = data.action;
-    var payload = data.payload;
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-
-    setupSheets();
-
-    if (action === "submit_kerusakan") {
-      var s = ss.getSheetByName("KERUSAKAN");
-      s.appendRow([
-        payload.id,
-        payload.timestamp,
-        payload.namaPelapor,
-        payload.statusPelapor,
-        payload.kontak,
-        payload.lokasi,
-        payload.detailLokasi,
-        payload.namaSarana,
-        payload.jenisKerusakan,
-        payload.deskripsi,
-        payload.foto || "-",
-        payload.tanggalLapor,
-        payload.status,
-        payload.catatanPetugas || "-",
-        payload.tanggalSelesai || "-"
-      ]);
-    } else if (action === "submit_peminjaman") {
-      var s = ss.getSheetByName("PEMINJAMAN");
-      s.appendRow([
-        payload.id,
-        payload.timestamp,
-        payload.namaPeminjam,
-        payload.statusPeminjam,
-        payload.kelasUnit,
-        payload.kontak,
-        payload.namaBarang,
-        payload.jumlah,
-        payload.keperluan,
-        payload.tanggalPinjam,
-        payload.tanggalRencanaKembali,
-        payload.catatan || "-",
-        payload.status
-      ]);
-    } else if (action === "submit_pengembalian") {
-      var s = ss.getSheetByName("PENGEMBALIAN");
-      s.appendRow([
-        payload.id,
-        payload.idPeminjaman,
-        payload.timestamp,
-        payload.namaPeminjam,
-        payload.namaBarang,
-        payload.jumlah,
-        payload.tanggalPinjam,
-        payload.tanggalRencanaKembali,
-        payload.tanggalPengembalian,
-        payload.kondisiBarang,
-        payload.catatan || "-",
-        payload.foto || "-",
-        payload.status
-      ]);
-      
-      // Update Loan status in PEMINJAMAN sheet
-      var loanSheet = ss.getSheetByName("PEMINJAMAN");
-      var values = loanSheet.getDataRange().getValues();
-      for (var i = 1; i < values.length; i++) {
-        if (values[i][0] === payload.idPeminjaman) {
-          loanSheet.getRange(i + 1, 13).setValue("SELESAI");
-          break;
-        }
-      }
-    }
-
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "success",
-      message: "Data berhasil dicatat ke Google Sheets"
-    })).setMimeType(ContentService.MimeType.JSON);
-
-  } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({
-      status: "error",
-      message: err.toString()
-    })).setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({
-    status: "online",
-    school: "SMA Negeri 1 Tejakula",
-    service: "SIMPEL SARPRAS Google Sheets Gateway"
-  })).setMimeType(ContentService.MimeType.JSON);
-}`;
+    localStorage.setItem(STORAGE_KEYS.DAMAGE, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.LOANS, JSON.stringify([]));
+    localStorage.setItem(STORAGE_KEYS.RETURNS, JSON.stringify([]));
   },
 };

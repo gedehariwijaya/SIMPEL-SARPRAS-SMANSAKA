@@ -159,7 +159,7 @@ export const LoanRequestForm: React.FC<LoanRequestFormProps> = ({ onSuccess, onC
             Pengajuan Berhasil Dikirim!
           </h3>
           <p className="text-sm text-slate-600 mt-1">
-            Data peminjaman telah tersimpan ke Google Sheets Sarpras sekolah.
+            Data peminjaman telah tersimpan ke Database Realtime Firebase Sarpras sekolah.
           </p>
 
           {/* Loan ID Box */}

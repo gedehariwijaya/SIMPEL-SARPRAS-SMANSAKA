@@ -113,6 +113,7 @@ export const DamageReportForm: React.FC<DamageReportFormProps> = ({ onSuccess, o
         jenisKerusakan,
         deskripsi: deskripsi.trim(),
         foto,
+        tanggalLapor: getTodayISODate(),
       });
 
       // Confetti celebration
@@ -183,7 +184,7 @@ export const DamageReportForm: React.FC<DamageReportFormProps> = ({ onSuccess, o
             Laporan Berhasil Dikirim!
           </h3>
           <p className="text-sm text-slate-600 mt-1">
-            Data telah tercatat dan tersimpan ke Google Sheets Sarpras.
+            Data telah tercatat dan tersimpan ke Database Realtime Firebase Sarpras.
           </p>
 
           {/* Report ID Box */}

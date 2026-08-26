@@ -1,29 +1,24 @@
 import React from 'react';
 import { ActiveTab, AppConfig } from '../types';
 import { SchoolLogo } from './SchoolLogo';
-import { Home, Wrench, Package, RotateCcw, ClipboardList, Shield, Sheet, Wifi, WifiOff } from 'lucide-react';
+import { Home, Wrench, Package, RotateCcw, ClipboardList, Shield, Flame } from 'lucide-react';
 
 interface HeaderProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   config: AppConfig;
-  onOpenConfig: () => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
-  config,
-  onOpenConfig,
 }) => {
-  const isSheetsConnected = !!config.appsScriptWebhookUrl;
-
   const navItems = [
     { id: 'beranda' as ActiveTab, label: 'Beranda', icon: Home },
     { id: 'kerusakan' as ActiveTab, label: 'Lapor Kerusakan', icon: Wrench },
     { id: 'peminjaman' as ActiveTab, label: 'Peminjaman', icon: Package },
     { id: 'pengembalian' as ActiveTab, label: 'Pengembalian', icon: RotateCcw },
-    { id: 'riwayat' as ActiveTab, label: 'Riwayat', icon: ClipboardList },
+    { id: 'riwayat' as ActiveTab, label: 'Riwayat & Unduh', icon: ClipboardList },
     { id: 'admin' as ActiveTab, label: 'Admin Sarpras', icon: Shield },
   ];
 
@@ -56,43 +51,19 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
           </div>
 
-          {/* Right Header Actions */}
+          {/* Right Header: Realtime Firebase Status Badge */}
           <div className="flex items-center space-x-2">
-            {/* Google Sheets Connection Pill */}
-            <button
-              id="btn-sheets-indicator"
-              onClick={onOpenConfig}
-              className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold transition-all shadow-xs ${
-                isSheetsConnected
-                  ? 'bg-emerald-900/60 text-emerald-200 border border-emerald-500/50 hover:bg-emerald-800/60'
-                  : 'bg-indigo-950/80 text-indigo-200 border border-indigo-700/60 hover:bg-indigo-900/80'
-              }`}
-              title="Status Integrasi Google Sheets"
+            <div
+              id="header-firebase-status"
+              className="flex items-center space-x-2 px-3 py-1.5 rounded-2xl text-xs font-black bg-amber-950/80 text-amber-200 border border-amber-500/60 shadow-md select-none"
+              title="Database Cloud Firebase Firestore Realtime Aktif"
             >
-              <Sheet className="w-3.5 h-3.5" />
-              <span className="hidden md:inline">
-                {isSheetsConnected ? 'Sheets Terhubung' : 'Google Sheets'}
+              <Flame className="w-4 h-4 text-amber-400" />
+              <span className="inline font-bold">
+                Firebase Realtime
               </span>
-              {isSheetsConnected ? (
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400"></span>
-              ) : (
-                <span className="w-2 h-2 rounded-full bg-amber-400 shadow-sm shadow-amber-400"></span>
-              )}
-            </button>
-
-            {/* Quick Sheets External Link */}
-            {config.googleSpreadsheetUrl && (
-              <a
-                id="link-open-spreadsheet"
-                href={config.googleSpreadsheetUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hidden lg:flex items-center space-x-1 px-3 py-1.5 bg-indigo-800/60 hover:bg-indigo-700/70 text-indigo-100 rounded-xl text-xs font-semibold border border-indigo-500/40 transition-colors shadow-xs"
-                title="Buka Spreadsheet di Google Drive"
-              >
-                <span>📊 Buka Sheet</span>
-              </a>
-            )}
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400"></span>
+            </div>
           </div>
         </div>
       </div>
@@ -124,10 +95,10 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation Bar (Fixed for super convenient one-thumb reach) */}
+      {/* Mobile Bottom Navigation Bar */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800/80 py-1.5 px-3 z-50 shadow-2xl">
-        <div className="grid grid-cols-5 gap-1 max-w-md mx-auto">
-          {navItems.slice(0, 5).map((item) => {
+        <div className="grid grid-cols-6 gap-1 max-w-lg mx-auto">
+          {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (
@@ -146,10 +117,10 @@ export const Header: React.FC<HeaderProps> = ({
                     isActive ? 'bg-indigo-600/30 text-indigo-300 shadow-inner' : 'text-slate-400'
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
+                  <Icon className="w-4 h-4" />
                 </div>
-                <span className="text-[10px] mt-0.5 tracking-tight truncate max-w-full font-medium">
-                  {item.id === 'kerusakan' ? 'Kerusakan' : item.id === 'peminjaman' ? 'Pinjam' : item.id === 'pengembalian' ? 'Kembali' : item.label}
+                <span className="text-[9px] mt-0.5 tracking-tight truncate max-w-full font-medium">
+                  {item.id === 'kerusakan' ? 'Kerusakan' : item.id === 'peminjaman' ? 'Pinjam' : item.id === 'pengembalian' ? 'Kembali' : item.id === 'riwayat' ? 'Unduh' : item.label}
                 </span>
               </button>
             );

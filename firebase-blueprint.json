@@ -1,0 +1,85 @@
+{
+  "entities": {
+    "DamageReport": {
+      "title": "DamageReport",
+      "description": "Laporan kerusakan sarana dan prasarana sekolah",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggalLapor": { "type": "string" },
+        "namaPelapor": { "type": "string" },
+        "statusPelapor": { "type": "string" },
+        "kontak": { "type": "string" },
+        "lokasi": { "type": "string" },
+        "detailLokasi": { "type": "string" },
+        "namaSarana": { "type": "string" },
+        "jenisKerusakan": { "type": "string" },
+        "deskripsi": { "type": "string" },
+        "foto": { "type": "string" },
+        "status": { "type": "string", "enum": ["DILAPORKAN", "DIPROSES", "SELESAI"] },
+        "catatanPetugas": { "type": "string" },
+        "tanggalSelesai": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "namaPelapor", "namaSarana", "status", "timestamp"]
+    },
+    "ItemLoan": {
+      "title": "ItemLoan",
+      "description": "Permohonan dan pencatatan peminjaman sarana",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "tanggalPinjam": { "type": "string" },
+        "namaPeminjam": { "type": "string" },
+        "statusPeminjam": { "type": "string" },
+        "kelasUnit": { "type": "string" },
+        "kontak": { "type": "string" },
+        "namaBarang": { "type": "string" },
+        "jumlah": { "type": "string" },
+        "waktu": { "type": "string" },
+        "tanggalRencanaKembali": { "type": "string" },
+        "keperluan": { "type": "string" },
+        "catatan": { "type": "string" },
+        "status": { "type": "string", "enum": ["MENUNGGU", "DISETUJUI", "SEDANG DIPINJAM", "SELESAI", "DITOLAK"] },
+        "persetujuanOleh": { "type": "string" },
+        "tanggalDisetujui": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "namaPeminjam", "namaBarang", "status", "timestamp"]
+    },
+    "ItemReturn": {
+      "title": "ItemReturn",
+      "description": "Pencatatan pengembalian sarana yang dipinjam",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "idPeminjaman": { "type": "string" },
+        "tanggalPengembalian": { "type": "string" },
+        "namaPeminjam": { "type": "string" },
+        "namaBarang": { "type": "string" },
+        "jumlah": { "type": "string" },
+        "tanggalPinjam": { "type": "string" },
+        "kondisiBarang": { "type": "string", "enum": ["Baik", "Ada kerusakan", "Rusak"] },
+        "catatan": { "type": "string" },
+        "penerimaPetugas": { "type": "string" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "namaPeminjam", "namaBarang", "kondisiBarang", "timestamp"]
+    }
+  },
+  "firestore": {
+    "damageReports": {
+      "entity": "DamageReport",
+      "description": "Koleksi data laporan kerusakan fasilitas"
+    },
+    "itemLoans": {
+      "entity": "ItemLoan",
+      "description": "Koleksi data peminjaman sarana prasarana"
+    },
+    "itemReturns": {
+      "entity": "ItemReturn",
+      "description": "Koleksi data pengembalian sarana"
+    }
+  }
+}

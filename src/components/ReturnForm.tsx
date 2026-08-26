@@ -185,7 +185,7 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ loans, onSuccess, onCanc
             Pengembalian Berhasil Dicatat!
           </h3>
           <p className="text-sm text-slate-600 mt-1">
-            Status peminjaman telah diubah menjadi <strong className="text-slate-800 font-bold">SELESAI</strong> di database Google Sheets.
+            Status peminjaman telah diubah menjadi <strong className="text-slate-800 font-bold">SELESAI</strong> di Database Realtime Firebase Sarpras.
           </p>
 
           {/* Return ID Box */}

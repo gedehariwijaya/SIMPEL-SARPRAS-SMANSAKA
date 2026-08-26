@@ -72,6 +72,16 @@ export interface ActivityLog {
   statusColor: string;
 }
 
+export interface FirebaseConfig {
+  apiKey: string;
+  authDomain?: string;
+  projectId: string;
+  storageBucket?: string;
+  messagingSenderId?: string;
+  appId: string;
+  measurementId?: string;
+}
+
 export interface AppConfig {
   googleSpreadsheetId: string;
   googleSpreadsheetUrl: string;
@@ -79,6 +89,7 @@ export interface AppConfig {
   schoolName: string;
   autoSync: boolean;
   lastSyncedAt?: string;
+  useFirebase?: boolean;
 }
 
 export type ActiveTab = 'beranda' | 'kerusakan' | 'peminjaman' | 'pengembalian' | 'riwayat' | 'admin';

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ActiveTab, DamageReport, ItemLoan, ItemReturn, AppConfig, ActivityLog } from './types';
 import { StorageService } from './services/storageService';
+import { FirebaseService } from './services/firebaseService';
 import { Header } from './components/Header';
 import { QuickHome } from './components/QuickHome';
 import { DamageReportForm } from './components/DamageReportForm';
@@ -9,7 +10,6 @@ import { ReturnForm } from './components/ReturnForm';
 import { HistoryView } from './components/HistoryView';
 import { AdminDashboard } from './components/AdminDashboard';
 import { DetailModal } from './components/DetailModal';
-import { GoogleSheetsModal } from './components/GoogleSheetsModal';
 import { SchoolLogo } from './components/SchoolLogo';
 
 export default function App() {
@@ -27,8 +27,6 @@ export default function App() {
     type: 'kerusakan' | 'peminjaman' | 'pengembalian';
     data: DamageReport | ItemLoan | ItemReturn;
   } | null>(null);
-  
-  const [isSheetsModalOpen, setIsSheetsModalOpen] = useState(false);
 
   const loadAllData = () => {
     const d = StorageService.getDamageReports();
@@ -46,6 +44,43 @@ export default function App() {
 
   useEffect(() => {
     loadAllData();
+
+    // Setup Realtime Firebase Firestore Subscriptions automatically
+    let unsubDamage: (() => void) | null = null;
+    let unsubLoans: (() => void) | null = null;
+    let unsubReturns: (() => void) | null = null;
+
+    if (FirebaseService.isConfigured()) {
+      unsubDamage = FirebaseService.subscribeDamageReports((reports) => {
+        if (reports) {
+          setDamageReports(reports);
+          StorageService.setDamageReports(reports);
+          setActivities(StorageService.getRecentActivities());
+        }
+      });
+
+      unsubLoans = FirebaseService.subscribeLoans((itemLoans) => {
+        if (itemLoans) {
+          setLoans(itemLoans);
+          StorageService.setLoans(itemLoans);
+          setActivities(StorageService.getRecentActivities());
+        }
+      });
+
+      unsubReturns = FirebaseService.subscribeReturns((itemReturns) => {
+        if (itemReturns) {
+          setReturns(itemReturns);
+          StorageService.setReturns(itemReturns);
+          setActivities(StorageService.getRecentActivities());
+        }
+      });
+    }
+
+    return () => {
+      if (unsubDamage) unsubDamage();
+      if (unsubLoans) unsubLoans();
+      if (unsubReturns) unsubReturns();
+    };
   }, []);
 
   const handleActivitySelect = (act: ActivityLog) => {
@@ -61,11 +96,6 @@ export default function App() {
     }
   };
 
-  const handleResetDemoData = () => {
-    StorageService.resetToInitialData();
-    loadAllData();
-  };
-
   return (
     <div className="min-h-screen flex flex-col bg-slate-100 text-slate-900">
       {/* Header with Navigation */}
@@ -73,10 +103,9 @@ export default function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         config={config}
-        onOpenConfig={() => setIsSheetsModalOpen(true)}
       />
 
-      {/* Main Content Area (Mobile-First Responsive Reflow) */}
+      {/* Main Content Area */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6">
         {activeTab === 'beranda' && (
           <QuickHome
@@ -91,7 +120,7 @@ export default function App() {
 
         {activeTab === 'kerusakan' && (
           <DamageReportForm
-            onSuccess={(newReport) => {
+            onSuccess={() => {
               loadAllData();
             }}
             onCancel={() => setActiveTab('beranda')}
@@ -100,7 +129,7 @@ export default function App() {
 
         {activeTab === 'peminjaman' && (
           <LoanRequestForm
-            onSuccess={(newLoan) => {
+            onSuccess={() => {
               loadAllData();
             }}
             onCancel={() => setActiveTab('beranda')}
@@ -110,7 +139,7 @@ export default function App() {
         {activeTab === 'pengembalian' && (
           <ReturnForm
             loans={loans}
-            onSuccess={(newReturn) => {
+            onSuccess={() => {
               loadAllData();
             }}
             onCancel={() => setActiveTab('beranda')}
@@ -135,7 +164,6 @@ export default function App() {
             returns={returns}
             config={config}
             onRefreshData={loadAllData}
-            onOpenConfigModal={() => setIsSheetsModalOpen(true)}
             onSelectDamage={(report) => setSelectedDetail({ type: 'kerusakan', data: report })}
             onSelectLoan={(loan) => setSelectedDetail({ type: 'peminjaman', data: loan })}
           />
@@ -146,19 +174,6 @@ export default function App() {
       <DetailModal
         item={selectedDetail}
         onClose={() => setSelectedDetail(null)}
-      />
-
-      {/* Modal: Google Sheets Setup & Webhook Configuration */}
-      <GoogleSheetsModal
-        isOpen={isSheetsModalOpen}
-        onClose={() => setIsSheetsModalOpen(false)}
-        config={config}
-        damageReports={damageReports}
-        loans={loans}
-        returns={returns}
-        onSaveConfig={(updated) => setConfig(updated)}
-        onRefreshAllData={loadAllData}
-        onResetDemoData={handleResetDemoData}
       />
 
       {/* Footer */}

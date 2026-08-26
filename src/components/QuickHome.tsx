@@ -51,7 +51,7 @@ export const QuickHome: React.FC<QuickHomeProps> = ({
                 Selamat Datang di SIMPEL SARPRAS
               </h2>
               <p className="text-xs sm:text-sm text-slate-600 mt-1 max-w-2xl leading-relaxed">
-                Layanan terpadu pelaporan kerusakan fasilitas, peminjaman sarana sekolah, dan pencatatan pengembalian barang terintegrasi Google Sheets.
+                Layanan terpadu pelaporan kerusakan fasilitas, peminjaman sarana sekolah, dan pencatatan pengembalian barang terintegrasi Database Realtime Firebase dengan dukungan unduh laporan PDF & Excel.
               </p>
             </div>
           </div>
