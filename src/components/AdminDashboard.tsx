@@ -21,6 +21,13 @@ import {
   FileSpreadsheet,
   Download,
   Trash2,
+  Lock,
+  Unlock,
+  KeyRound,
+  Eye,
+  EyeOff,
+  LogOut,
+  ArrowLeft,
 } from 'lucide-react';
 
 interface AdminDashboardProps {
@@ -31,6 +38,7 @@ interface AdminDashboardProps {
   onRefreshData: () => void;
   onSelectDamage: (report: DamageReport) => void;
   onSelectLoan: (loan: ItemLoan) => void;
+  onBackToHome?: () => void;
 }
 
 export const AdminDashboard: React.FC<AdminDashboardProps> = ({
@@ -41,7 +49,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
   onRefreshData,
   onSelectDamage,
   onSelectLoan,
+  onBackToHome,
 }) => {
+  // Authentication State
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(() => {
+    return sessionStorage.getItem('simpel_sarpras_admin_auth') === 'true';
+  });
+  const [passwordInput, setPasswordInput] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [authError, setAuthError] = useState('');
+
   const [activeSubTab, setActiveSubTab] = useState<'kerusakan' | 'peminjaman' | 'pengembalian' | 'rekap'>('kerusakan');
   const [isExporting, setIsExporting] = useState(false);
   const [actionMessage, setActionMessage] = useState<{ text: string; success: boolean } | null>(null);
@@ -53,6 +70,128 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
 
   const todayStr = getTodayISODate();
   const isFirebaseConnected = FirebaseService.isConfigured();
+
+  const handleLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (passwordInput === 'Aset') {
+      setIsAuthenticated(true);
+      sessionStorage.setItem('simpel_sarpras_admin_auth', 'true');
+      setAuthError('');
+      setPasswordInput('');
+    } else {
+      setAuthError('Kata sandi salah! Silakan coba lagi.');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    sessionStorage.removeItem('simpel_sarpras_admin_auth');
+    setPasswordInput('');
+    setAuthError('');
+  };
+
+  // If user is not yet authenticated, show password gate screen
+  if (!isAuthenticated) {
+    return (
+      <div className="max-w-md mx-auto my-6 sm:my-12 animate-fade-in px-4">
+        <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-xl border border-slate-200/80">
+          {/* School Badge & Lock Header */}
+          <div className="text-center">
+            <div className="relative inline-block mb-3">
+              <div className="w-16 h-16 rounded-2xl bg-indigo-50 p-2 border border-indigo-100 flex items-center justify-center mx-auto shadow-sm">
+                <SchoolLogo className="w-full h-full" />
+              </div>
+              <div className="absolute -bottom-1.5 -right-1.5 w-7 h-7 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md border-2 border-white">
+                <Lock className="w-3.5 h-3.5" />
+              </div>
+            </div>
+
+            <h2 className="text-xl font-black text-slate-900 tracking-tight">
+              Akses Admin Sarpras
+            </h2>
+            <p className="text-xs text-indigo-700 font-bold uppercase tracking-wider mt-0.5">
+              SMA Negeri 1 Tejakula
+            </p>
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              Masukkan kata sandi administrator untuk mengelola status perbaikan sarana, persetujuan peminjaman, dan unduh data.
+            </p>
+          </div>
+
+          {/* Password Form */}
+          <form onSubmit={handleLogin} className="mt-6 space-y-4">
+            <div>
+              <label className="block text-xs font-black text-slate-700 uppercase tracking-wider mb-2">
+                Kata Sandi Admin
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                  <KeyRound className="w-4 h-4" />
+                </div>
+                <input
+                  id="input-admin-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={passwordInput}
+                  onChange={(e) => {
+                    setPasswordInput(e.target.value);
+                    if (authError) setAuthError('');
+                  }}
+                  placeholder="Masukkan password admin..."
+                  autoFocus
+                  required
+                  className="w-full pl-10 pr-11 py-3 text-sm bg-slate-50 border border-slate-300 rounded-2xl focus:bg-white focus:ring-2 focus:ring-indigo-600 focus:border-indigo-600 transition-all font-medium"
+                />
+                <button
+                  type="button"
+                  id="btn-toggle-show-password"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                  tabIndex={-1}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {authError && (
+              <div className="p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-2xl text-xs font-bold flex items-center gap-2 animate-shake">
+                <AlertTriangle className="w-4 h-4 shrink-0 text-rose-500" />
+                <span>{authError}</span>
+              </div>
+            )}
+
+            <div className="pt-2 space-y-2.5">
+              <button
+                type="submit"
+                id="btn-submit-admin-password"
+                className="w-full py-3 px-4 bg-gradient-to-r from-indigo-600 via-indigo-700 to-violet-700 hover:from-indigo-700 hover:to-violet-800 text-white font-extrabold text-sm rounded-2xl shadow-lg shadow-indigo-900/25 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-[0.99]"
+              >
+                <Unlock className="w-4 h-4" />
+                <span>Buka Panel Admin</span>
+              </button>
+
+              {onBackToHome && (
+                <button
+                  type="button"
+                  id="btn-cancel-admin-login"
+                  onClick={onBackToHome}
+                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-2xl transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>Kembali ke Beranda</span>
+                </button>
+              )}
+            </div>
+          </form>
+
+          <div className="mt-6 pt-4 border-t border-slate-100 text-center">
+            <p className="text-[11px] text-slate-400">
+              SIMPEL SARPRAS • Sistem Informasi Manajemen Sarpras
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Metrics
   const pendingDamages = damageReports.filter((d) => d.status === 'DILAPORKAN');
@@ -168,6 +307,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({
             >
               <RefreshCw className="w-4 h-4 text-indigo-400" />
               <span>Sinkronkan Data</span>
+            </button>
+
+            {/* Lock / Logout Admin Button */}
+            <button
+              id="btn-admin-logout"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-1.5 px-3 py-2.5 text-xs font-bold bg-slate-100 hover:bg-rose-50 text-slate-700 hover:text-rose-700 rounded-2xl transition-colors border border-slate-200 hover:border-rose-200 cursor-pointer"
+              title="Kunci / Keluar dari Panel Admin"
+            >
+              <Lock className="w-3.5 h-3.5 text-slate-500" />
+              <span>Kunci</span>
             </button>
           </div>
         </div>

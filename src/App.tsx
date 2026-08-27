@@ -166,6 +166,7 @@ export default function App() {
             onRefreshData={loadAllData}
             onSelectDamage={(report) => setSelectedDetail({ type: 'kerusakan', data: report })}
             onSelectLoan={(loan) => setSelectedDetail({ type: 'peminjaman', data: loan })}
+            onBackToHome={() => setActiveTab('beranda')}
           />
         )}
       </main>
