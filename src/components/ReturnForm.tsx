@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { ItemLoan, ItemReturn, ItemCondition } from '../types';
 import { StorageService, getTodayISODate } from '../services/storageService';
-import { RotateCcw, Search, CheckCircle2, Copy, Share2, ArrowLeft, RefreshCw, AlertCircle, Camera, X } from 'lucide-react';
+import { RotateCcw, Search, CheckCircle2, Copy, Share2, ArrowLeft, RefreshCw, AlertCircle, Camera, X, Image as ImageIcon, Upload } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface ReturnFormProps {
@@ -28,7 +28,8 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ loans, onSuccess, onCanc
   const [submittedReturn, setSubmittedReturn] = useState<ItemReturn | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
 
   // Filter loan items that are currently active or not yet completed
   const activeLoans = loans.filter((l) => l.status === 'SEDANG DIPINJAM' || l.status === 'DISETUJUI' || l.status === 'MENUNGGU');
@@ -49,12 +50,14 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ loans, onSuccess, onCanc
     setErrorMsg('');
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setErrorMsg('Format file harus berupa gambar/foto.');
+      return;
+    }
 
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMsg('Ukuran foto terlalu besar (maksimal 5MB).');
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMsg('Ukuran foto terlalu besar (maksimal 10MB).');
       return;
     }
 
@@ -64,8 +67,8 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ loans, onSuccess, onCanc
       img.src = uploadEvent.target?.result as string;
       img.onload = () => {
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1000;
-        const MAX_HEIGHT = 1000;
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
         let width = img.width;
         let height = img.height;
 
@@ -85,16 +88,25 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ loans, onSuccess, onCanc
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
         setFoto(dataUrl);
+        setErrorMsg('');
       };
     };
     reader.readAsDataURL(file);
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processFile(file);
+    e.target.value = '';
+  };
+
   const removePhoto = () => {
     setFoto(undefined);
-    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -491,44 +503,88 @@ export const ReturnForm: React.FC<ReturnFormProps> = ({ loans, onSuccess, onCanc
 
             {/* Photo of returned item */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
-                📷 Foto Kondisi Setelah Pengembalian <span className="text-slate-400 font-normal">(Opsional)</span>
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  📷 Foto Kondisi Setelah Pengembalian <span className="text-slate-400 font-normal">(Opsional)</span>
+                </label>
+                <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                  Galeri / Kamera
+                </span>
+              </div>
 
+              {/* Gallery Input */}
               <input
-                ref={fileInputRef}
+                ref={galleryInputRef}
+                type="file"
+                accept="image/*,image/jpeg,image/png,image/webp,image/heic,image/heif"
+                onChange={handleImageChange}
+                className="hidden"
+                id="input-photo-return-gallery"
+              />
+
+              {/* Direct Camera Input */}
+              <input
+                ref={cameraInputRef}
                 type="file"
                 accept="image/*"
                 capture="environment"
                 onChange={handleImageChange}
                 className="hidden"
-                id="input-photo-return"
+                id="input-photo-return-camera"
               />
 
               {!foto ? (
-                <button
-                  type="button"
-                  id="btn-add-return-photo"
-                  onClick={() => fileInputRef.current?.click()}
-                  className="w-full border border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-3.5 flex items-center justify-center gap-2 text-slate-600 hover:text-emerald-600 bg-white transition-colors cursor-pointer text-xs font-semibold"
-                >
-                  <Camera className="w-4 h-4 text-slate-500" />
-                  <span>Ambil Foto Kondisi Barang (Kamera / Galeri)</span>
-                </button>
+                <div className="border border-dashed border-slate-300 hover:border-emerald-500 rounded-2xl p-3.5 bg-white transition-colors text-center">
+                  <p className="text-[11px] text-slate-600 mb-2 font-medium">
+                    Lampirkan bukti foto kondisi fisik sarana yang dikembalikan
+                  </p>
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      type="button"
+                      id="btn-return-gallery-pick"
+                      onClick={() => galleryInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Pilih dari Galeri</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="btn-return-camera-pick"
+                      onClick={() => cameraInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 transition-colors cursor-pointer"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Buka Kamera</span>
+                    </button>
+                  </div>
+                </div>
               ) : (
-                <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 flex items-center justify-center max-h-48">
+                <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 flex items-center justify-center max-h-52 p-2">
                   <img
                     src={foto}
                     alt="Foto Pengembalian"
-                    className="max-h-48 w-auto object-contain rounded-xl"
+                    className="max-h-48 w-auto object-contain rounded-xl shadow-md"
                   />
-                  <button
-                    type="button"
-                    onClick={removePhoto}
-                    className="absolute top-2 right-2 bg-rose-600 text-white p-1 rounded-full hover:bg-rose-700 shadow-md cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => galleryInputRef.current?.click()}
+                      className="bg-slate-900/80 hover:bg-slate-900 text-white px-2 py-1 rounded-lg text-[10px] font-bold border border-white/20 flex items-center gap-1 cursor-pointer"
+                      title="Ganti Foto dari Galeri"
+                    >
+                      <Upload className="w-3 h-3" />
+                      <span>Ganti Galeri</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={removePhoto}
+                      className="bg-rose-600 text-white p-1 rounded-lg hover:bg-rose-700 shadow-md cursor-pointer"
+                      title="Hapus Foto"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>

@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import { DamageReport } from '../types';
 import { LOCATION_OPTIONS, DAMAGE_TYPE_OPTIONS, USER_ROLES } from '../data/initialData';
 import { StorageService, getTodayISODate } from '../services/storageService';
-import { Wrench, Camera, X, CheckCircle2, Copy, Share2, ArrowLeft, RefreshCw, AlertCircle } from 'lucide-react';
+import { Wrench, Camera, X, CheckCircle2, Copy, Share2, ArrowLeft, RefreshCw, AlertCircle, Image as ImageIcon, Upload, Eye } from 'lucide-react';
 import confetti from 'canvas-confetti';
 
 interface DamageReportFormProps {
@@ -20,22 +20,26 @@ export const DamageReportForm: React.FC<DamageReportFormProps> = ({ onSuccess, o
   const [jenisKerusakan, setJenisKerusakan] = useState('Rusak sedang');
   const [deskripsi, setDeskripsi] = useState('');
   const [foto, setFoto] = useState<string | undefined>(undefined);
+  const [isDragging, setIsDragging] = useState(false);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [submittedReport, setSubmittedReport] = useState<DamageReport | null>(null);
   const [copied, setCopied] = useState(false);
 
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const todayDate = getTodayISODate();
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const processFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      setErrorMsg('Format file harus berupa gambar/foto (JPG, PNG, WEBP, dll).');
+      return;
+    }
 
-    // Check size limit (max 5MB raw)
-    if (file.size > 5 * 1024 * 1024) {
-      setErrorMsg('Ukuran foto terlalu besar (maksimal 5MB).');
+    // Check size limit (max 10MB raw)
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMsg('Ukuran foto terlalu besar (maksimal 10MB).');
       return;
     }
 
@@ -46,8 +50,8 @@ export const DamageReportForm: React.FC<DamageReportFormProps> = ({ onSuccess, o
       img.onload = () => {
         // Compress image using client-side canvas
         const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 1000;
-        const MAX_HEIGHT = 1000;
+        const MAX_WIDTH = 1200;
+        const MAX_HEIGHT = 1200;
         let width = img.width;
         let height = img.height;
 
@@ -67,19 +71,48 @@ export const DamageReportForm: React.FC<DamageReportFormProps> = ({ onSuccess, o
         canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx?.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.82);
         setFoto(dataUrl);
         setErrorMsg('');
+      };
+      img.onerror = () => {
+        setErrorMsg('Gagal memproses gambar. Silakan gunakan format gambar standar.');
       };
     };
     reader.readAsDataURL(file);
   };
 
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processFile(file);
+    // reset input value so re-selecting the same photo triggers change
+    e.target.value = '';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
   const removePhoto = () => {
     setFoto(undefined);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -432,51 +465,127 @@ export const DamageReportForm: React.FC<DamageReportFormProps> = ({ onSuccess, o
             />
           </div>
 
-          {/* Photo Upload / Mobile Camera */}
+          {/* Photo Upload / Mobile Camera & Gallery */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              📷 Foto Kerusakan <span className="text-slate-400 font-normal">(Sangat disarankan)</span>
-            </label>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-xs font-bold text-slate-700">
+                📷 Foto Kerusakan <span className="text-slate-400 font-normal">(Sangat disarankan)</span>
+              </label>
+              <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md border border-rose-100">
+                Galeri & Kamera Didukung
+              </span>
+            </div>
 
+            {/* Hidden Input 1: Standard Gallery / File Picker (no capture restriction) */}
             <input
-              ref={fileInputRef}
+              ref={galleryInputRef}
+              type="file"
+              accept="image/*,image/jpeg,image/png,image/webp,image/heic,image/heif"
+              onChange={handleImageChange}
+              className="hidden"
+              id="input-photo-gallery"
+            />
+
+            {/* Hidden Input 2: Direct Camera Viewfinder */}
+            <input
+              ref={cameraInputRef}
               type="file"
               accept="image/*"
               capture="environment"
               onChange={handleImageChange}
               className="hidden"
-              id="input-photo-upload"
+              id="input-photo-camera"
             />
 
             {!foto ? (
-              <button
-                type="button"
-                id="btn-add-photo"
-                onClick={() => fileInputRef.current?.click()}
-                className="w-full border-2 border-dashed border-slate-300 hover:border-rose-500 rounded-2xl p-4 flex flex-col items-center justify-center gap-1.5 text-slate-600 hover:text-rose-600 bg-white transition-colors cursor-pointer"
+              <div
+                onDrop={handleDrop}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                className={`w-full border-2 border-dashed rounded-2xl p-4 md:p-5 transition-all text-center ${
+                  isDragging
+                    ? 'border-rose-500 bg-rose-50/80 scale-[1.01]'
+                    : 'border-slate-300 hover:border-rose-400 bg-white'
+                }`}
               >
-                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
-                  <Camera className="w-5 h-5 text-slate-500" />
+                <div className="w-12 h-12 rounded-2xl bg-rose-50 text-rose-600 flex items-center justify-center mx-auto mb-2 shadow-xs">
+                  <ImageIcon className="w-6 h-6" />
                 </div>
-                <span className="text-xs font-bold">Ambil Foto / Pilih dari Galeri</span>
-                <span className="text-[10px] text-slate-400">Format JPG, PNG (Kompresi otomatis)</span>
-              </button>
+                
+                <p className="text-xs font-bold text-slate-800 mb-1">
+                  Unggah Foto Kerusakan Fasilitas
+                </p>
+                <p className="text-[11px] text-slate-500 mb-3 max-w-xs mx-auto">
+                  Pilih foto yang tersimpan di Galeri perangkat Anda atau ambil langsung dengan Kamera
+                </p>
+
+                {/* Two Action Buttons */}
+                <div className="flex flex-wrap items-center justify-center gap-2 max-w-md mx-auto">
+                  <button
+                    type="button"
+                    id="btn-choose-from-gallery"
+                    onClick={() => galleryInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-700 hover:to-red-700 text-white rounded-xl text-xs font-black shadow-sm hover:shadow-md transition-all cursor-pointer"
+                  >
+                    <Upload className="w-4 h-4" />
+                    <span>Pilih dari Galeri</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    id="btn-take-camera-photo"
+                    onClick={() => cameraInputRef.current?.click()}
+                    className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-slate-200"
+                  >
+                    <Camera className="w-4 h-4 text-slate-600" />
+                    <span>Buka Kamera</span>
+                  </button>
+                </div>
+
+                <span className="text-[10px] text-slate-400 block mt-2.5">
+                  Format: JPG, PNG, WEBP • Ukuran otomatis dikompresi
+                </span>
+              </div>
             ) : (
-              <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-900 flex items-center justify-center max-h-60">
-                <img
-                  src={foto}
-                  alt="Foto Bukti Kerusakan"
-                  className="max-h-60 w-auto object-contain rounded-xl"
-                />
-                <button
-                  type="button"
-                  id="btn-remove-photo"
-                  onClick={removePhoto}
-                  className="absolute top-2 right-2 bg-rose-600/90 text-white p-2 rounded-full hover:bg-rose-700 shadow-md transition-colors cursor-pointer"
-                  title="Hapus Foto"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+              <div className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 p-2 shadow-inner">
+                <div className="relative max-h-64 flex items-center justify-center">
+                  <img
+                    src={foto}
+                    alt="Foto Bukti Kerusakan"
+                    className="max-h-64 w-auto object-contain rounded-xl shadow-md"
+                  />
+                  
+                  <div className="absolute top-2 right-2 flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      id="btn-change-photo-gallery"
+                      onClick={() => galleryInputRef.current?.click()}
+                      className="bg-slate-900/85 hover:bg-slate-900 text-white px-2.5 py-1.5 rounded-xl text-[11px] font-bold backdrop-blur-xs border border-white/20 shadow-md flex items-center gap-1 cursor-pointer transition-colors"
+                      title="Ganti Foto dari Galeri"
+                    >
+                      <Upload className="w-3.5 h-3.5" />
+                      <span>Ganti Galeri</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      id="btn-remove-photo"
+                      onClick={removePhoto}
+                      className="bg-rose-600 hover:bg-rose-700 text-white p-1.5 rounded-xl shadow-md transition-colors cursor-pointer"
+                      title="Hapus Foto"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between px-2 text-[11px] text-emerald-400 font-medium">
+                  <span className="flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Foto berhasil disiapkan
+                  </span>
+                  <span className="text-slate-400 text-[10px]">Siap dikirim bersama laporan</span>
+                </div>
               </div>
             )}
           </div>
