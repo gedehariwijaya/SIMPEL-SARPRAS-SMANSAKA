@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Round Light Gray Background -->
+  <circle cx="256" cy="256" r="215" fill="#EEEEF2" />
+
+  <!-- Clipboard Group -->
+  <g id="clipboard">
+    <!-- Clip Top Attachment -->
+    <path d="M 216 142 
+             L 216 124 
+             A 12 12 0 0 1 228 112 
+             L 242 112 
+             A 14 14 0 0 1 270 112 
+             L 284 112 
+             A 12 12 0 0 1 296 124 
+             L 296 142 
+             Z" 
+          fill="#004D8C" />
+    
+    <!-- Clip Hole in Tab -->
+    <circle cx="256" cy="123" r="9" fill="#EEEEF2" />
+
+    <!-- Clip Main Bracket -->
+    <rect x="194" y="132" width="124" height="34" rx="8" fill="#004D8C" />
+
+    <!-- Main Clipboard Body (Outer Navy Frame) -->
+    <rect x="148" y="148" width="216" height="252" rx="26" fill="#004D8C" />
+    
+    <!-- Inner White Paper Area -->
+    <rect x="166" y="166" width="180" height="216" rx="14" fill="#FFFFFF" />
+
+    <!-- Document Lines (Navy Blue) -->
+    <!-- Top Line (Full width) -->
+    <rect x="186" y="194" width="138" height="18" rx="4" fill="#004D8C" />
+    
+    <!-- Second Line (Short left) -->
+    <rect x="186" y="228" width="60" height="18" rx="4" fill="#004D8C" />
+  </g>
+
+  <!-- Orange Wrench Icon (Accurately proportioned) -->
+  <g id="wrench" fill="#FF7900">
+    <!-- Left diagonal leg -->
+    <polygon points="214,402 248,402 300,326 270,302 214,374" />
+
+    <!-- Upper Wrench Head (U-shaped jaw) & Right Handle -->
+    <path d="
+      M 258 228
+      C 278 228 302 240 312 258
+      C 320 272 320 292 312 308
+      L 378 376
+      A 18 18 0 0 1 378 402
+      L 370 410
+      A 18 18 0 0 1 344 410
+      L 282 344
+      C 268 350 252 348 240 338
+      C 226 324 220 304 224 286
+      C 224 268 236 254 252 248
+      C 252 264 264 278 280 282
+      L 290 282
+      L 290 258
+      C 278 254 268 244 262 230
+      Z
+    " />
+  </g>
+</svg>
