@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ActiveTab, AppConfig } from '../types';
 import { SchoolLogo } from './SchoolLogo';
-import { Home, Wrench, Package, RotateCcw, ClipboardList, Shield, Flame } from 'lucide-react';
+import { Home, Wrench, Package, RotateCcw, ClipboardList, Shield, Flame, WifiOff, RefreshCw } from 'lucide-react';
+import { FirebaseService } from '../services/firebaseService';
 
 interface HeaderProps {
   activeTab: ActiveTab;
@@ -13,6 +14,17 @@ export const Header: React.FC<HeaderProps> = ({
   activeTab,
   setActiveTab,
 }) => {
+  const [connState, setConnState] = useState<'online' | 'offline' | 'connecting'>(FirebaseService.getConnectionState());
+
+  useEffect(() => {
+    const unsub = FirebaseService.onConnectionStateChange((state) => {
+      setConnState(state);
+    });
+    // Trigger quick background connectivity validation
+    FirebaseService.validateBackendConnection();
+    return () => unsub();
+  }, []);
+
   const navItems = [
     { id: 'beranda' as ActiveTab, label: 'Beranda', icon: Home },
     { id: 'kerusakan' as ActiveTab, label: 'Lapor Kerusakan', icon: Wrench },
@@ -55,14 +67,40 @@ export const Header: React.FC<HeaderProps> = ({
           <div className="flex items-center space-x-2">
             <div
               id="header-firebase-status"
-              className="flex items-center space-x-2 px-3 py-1.5 rounded-2xl text-xs font-black bg-amber-950/80 text-amber-200 border border-amber-500/60 shadow-md select-none"
-              title="Database Cloud Firebase Firestore Realtime Aktif"
+              className={`flex items-center space-x-2 px-3 py-1.5 rounded-2xl text-xs font-black shadow-md select-none transition-colors ${
+                connState === 'online'
+                  ? 'bg-slate-900/80 text-emerald-300 border border-emerald-500/50 shadow-emerald-950/30'
+                  : connState === 'offline'
+                  ? 'bg-slate-900/80 text-amber-300 border border-amber-500/50'
+                  : 'bg-slate-900/80 text-indigo-200 border border-indigo-500/40'
+              }`}
+              title={
+                connState === 'online'
+                  ? 'Terhubung secara realtime ke Cloud Firebase Firestore'
+                  : connState === 'offline'
+                  ? 'Berjalan dalam mode lokal offline. Data tersimpan aman dan disinkronkan saat online.'
+                  : 'Menghubungkan ke Cloud Firestore...'
+              }
             >
-              <Flame className="w-4 h-4 text-amber-400" />
-              <span className="inline font-bold">
-                Firebase Realtime
-              </span>
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400"></span>
+              {connState === 'online' ? (
+                <>
+                  <Flame className="w-4 h-4 text-emerald-400" />
+                  <span className="inline font-bold">Cloud Realtime</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-sm shadow-emerald-400"></span>
+                </>
+              ) : connState === 'offline' ? (
+                <>
+                  <WifiOff className="w-4 h-4 text-amber-400" />
+                  <span className="inline font-bold">Mode Lokal</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+                </>
+              ) : (
+                <>
+                  <RefreshCw className="w-3.5 h-3.5 text-indigo-300 animate-spin" />
+                  <span className="inline font-bold">Sinkronisasi</span>
+                  <span className="w-2.5 h-2.5 rounded-full bg-indigo-400"></span>
+                </>
+              )}
             </div>
           </div>
         </div>

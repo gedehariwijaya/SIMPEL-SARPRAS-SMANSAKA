@@ -26,6 +26,40 @@ export function getTodayISODate(): string {
   return `${y}-${m}-${d}`;
 }
 
+// Friendly Relative / Absolute Time Formatter (Indonesian)
+export function formatFriendlyTime(timestampStr: string): string {
+  if (!timestampStr) return 'Baru saja';
+  const date = new Date(timestampStr);
+  if (isNaN(date.getTime())) return 'Baru saja';
+
+  const now = new Date();
+  const diffMs = Math.max(0, now.getTime() - date.getTime());
+  const diffMinutes = Math.floor(diffMs / 60000);
+
+  if (diffMinutes < 1) return 'Baru saja';
+  if (diffMinutes < 60) return `${diffMinutes} mnt lalu`;
+
+  const timeStr = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+  
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear();
+
+  if (isToday) return `Hari ini, ${timeStr}`;
+
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const isYesterday =
+    date.getDate() === yesterday.getDate() &&
+    date.getMonth() === yesterday.getMonth() &&
+    date.getFullYear() === yesterday.getFullYear();
+
+  if (isYesterday) return `Kemarin, ${timeStr}`;
+
+  return `${String(date.getDate()).padStart(2, '0')}/${String(date.getMonth() + 1).padStart(2, '0')} ${timeStr}`;
+}
+
 export const StorageService = {
   getConfig(): AppConfig {
     try {
@@ -95,11 +129,13 @@ export const StorageService = {
     const index = list.findIndex(r => r.id === id);
     if (index === -1) return null;
 
+    const nowIso = new Date().toISOString();
     const updatedItem: DamageReport = {
       ...list[index],
       status,
       catatanPetugas: catatanPetugas !== undefined ? catatanPetugas : list[index].catatanPetugas,
       tanggalSelesai: status === 'SELESAI' ? getTodayISODate() : list[index].tanggalSelesai,
+      updatedAt: nowIso,
     };
 
     list[index] = updatedItem;
@@ -110,6 +146,7 @@ export const StorageService = {
         status: updatedItem.status,
         catatanPetugas: updatedItem.catatanPetugas,
         tanggalSelesai: updatedItem.tanggalSelesai,
+        updatedAt: nowIso,
       }).catch(err => console.warn('Firestore update failed:', err));
     }
 
@@ -175,11 +212,13 @@ export const StorageService = {
     const index = list.findIndex(l => l.id === id);
     if (index === -1) return null;
 
+    const nowIso = new Date().toISOString();
     const updatedItem: ItemLoan = {
       ...list[index],
       status,
       persetujuanOleh,
       tanggalDisetujui: (status === 'DISETUJUI' || status === 'SEDANG DIPINJAM') ? getTodayISODate() : list[index].tanggalDisetujui,
+      updatedAt: nowIso,
     };
 
     list[index] = updatedItem;
@@ -190,6 +229,7 @@ export const StorageService = {
         status: updatedItem.status,
         persetujuanOleh: updatedItem.persetujuanOleh,
         tanggalDisetujui: updatedItem.tanggalDisetujui,
+        updatedAt: nowIso,
       }).catch(err => console.warn('Firestore loan update failed:', err));
     }
 
@@ -265,63 +305,161 @@ export const StorageService = {
   },
 
   // Compute live activity logs from reports, loans, returns
-  getRecentActivities(): ActivityLog[] {
-    const damage = this.getDamageReports();
-    const loans = this.getLoans();
-    const returns = this.getReturns();
+  // Accepts optional in-memory lists for instant reactive UI updates
+  getRecentActivities(
+    damageList?: DamageReport[],
+    loansList?: ItemLoan[],
+    returnsList?: ItemReturn[]
+  ): ActivityLog[] {
+    const damage = damageList || this.getDamageReports();
+    const loans = loansList || this.getLoans();
+    const returns = returnsList || this.getReturns();
 
     const activities: ActivityLog[] = [];
 
     damage.forEach(d => {
-      const date = new Date(d.timestamp);
-      const timeFormatted = isNaN(date.getTime()) ? 'Baru saja' : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
-      activities.push({
-        id: `act-dm-${d.id}`,
-        type: 'kerusakan',
-        refId: d.id,
-        timestamp: d.timestamp,
-        timeFormatted,
-        title: `Lapor Kerusakan: ${d.namaSarana}`,
-        subtitle: `${d.detailLokasi || d.lokasi} • Oleh ${d.namaPelapor} (${d.statusPelapor})`,
-        statusBadge: d.status,
-        statusColor: d.status === 'SELESAI' ? 'bg-emerald-100 text-emerald-800' : d.status === 'DIPROSES' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800',
-      });
+      if (d.status === 'DIPROSES') {
+        // Status update to DIPROSES (Sedang Dikerjakan/Diproses)
+        const effectiveTime = d.updatedAt || d.timestamp;
+        activities.push({
+          id: `act-dm-proc-${d.id}`,
+          type: 'kerusakan',
+          refId: d.id,
+          timestamp: effectiveTime,
+          timeFormatted: formatFriendlyTime(effectiveTime),
+          title: `Proses Perbaikan: ${d.namaSarana}`,
+          subtitle: `${d.catatanPetugas ? `Catatan: "${d.catatanPetugas}" • ` : ''}${d.detailLokasi || d.lokasi} • Pelapor: ${d.namaPelapor}`,
+          statusBadge: 'DIPROSES',
+          statusColor: 'bg-amber-100 text-amber-800 border border-amber-300',
+        });
+
+        // Also preserve initial report entry if timestamp is distinct
+        if (d.updatedAt && d.updatedAt !== d.timestamp) {
+          activities.push({
+            id: `act-dm-init-${d.id}`,
+            type: 'kerusakan',
+            refId: d.id,
+            timestamp: d.timestamp,
+            timeFormatted: formatFriendlyTime(d.timestamp),
+            title: `Lapor Kerusakan: ${d.namaSarana}`,
+            subtitle: `${d.detailLokasi || d.lokasi} • Oleh ${d.namaPelapor} (${d.statusPelapor})`,
+            statusBadge: 'DILAPORKAN',
+            statusColor: 'bg-slate-100 text-slate-700 border border-slate-200',
+          });
+        }
+      } else if (d.status === 'SELESAI') {
+        // Status update to SELESAI (Perbaikan Rampung)
+        const effectiveTime = d.updatedAt || d.timestamp;
+        activities.push({
+          id: `act-dm-done-${d.id}`,
+          type: 'kerusakan',
+          refId: d.id,
+          timestamp: effectiveTime,
+          timeFormatted: formatFriendlyTime(effectiveTime),
+          title: `Selesai Diperbaiki: ${d.namaSarana}`,
+          subtitle: `${d.tanggalSelesai ? `Tgl Selesai: ${d.tanggalSelesai} • ` : ''}${d.catatanPetugas ? `Catatan: "${d.catatanPetugas}" • ` : ''}${d.detailLokasi || d.lokasi}`,
+          statusBadge: 'SELESAI',
+          statusColor: 'bg-emerald-100 text-emerald-800 border border-emerald-300',
+        });
+
+        // Also preserve initial report entry if timestamp is distinct
+        if (d.updatedAt && d.updatedAt !== d.timestamp) {
+          activities.push({
+            id: `act-dm-init-${d.id}`,
+            type: 'kerusakan',
+            refId: d.id,
+            timestamp: d.timestamp,
+            timeFormatted: formatFriendlyTime(d.timestamp),
+            title: `Lapor Kerusakan: ${d.namaSarana}`,
+            subtitle: `${d.detailLokasi || d.lokasi} • Oleh ${d.namaPelapor} (${d.statusPelapor})`,
+            statusBadge: 'DILAPORKAN',
+            statusColor: 'bg-slate-100 text-slate-700 border border-slate-200',
+          });
+        }
+      } else {
+        // Status DILAPORKAN
+        activities.push({
+          id: `act-dm-${d.id}`,
+          type: 'kerusakan',
+          refId: d.id,
+          timestamp: d.timestamp,
+          timeFormatted: formatFriendlyTime(d.timestamp),
+          title: `Lapor Kerusakan: ${d.namaSarana}`,
+          subtitle: `${d.detailLokasi || d.lokasi} • Oleh ${d.namaPelapor} (${d.statusPelapor})`,
+          statusBadge: d.status,
+          statusColor: 'bg-rose-100 text-rose-800 border border-rose-200',
+        });
+      }
     });
 
     loans.forEach(l => {
-      const date = new Date(l.timestamp);
-      const timeFormatted = isNaN(date.getTime()) ? 'Baru saja' : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+      const effectiveTime = l.updatedAt || l.timestamp;
+      let title = `Permohonan Pinjam: ${l.namaBarang} (${l.jumlah})`;
+      let subtitle = `${l.namaPeminjam} (${l.kelasUnit || l.statusPeminjam}) • Tgl Pinjam: ${l.tanggalPinjam}`;
+      let statusColor = 'bg-amber-100 text-amber-800 border border-amber-200';
+
+      if (l.status === 'DISETUJUI') {
+        title = `Pinjaman Disetujui: ${l.namaBarang} (${l.jumlah})`;
+        subtitle = `Disetujui oleh ${l.persetujuanOleh || 'Sarpras'} • Peminjam: ${l.namaPeminjam}`;
+        statusColor = 'bg-emerald-100 text-emerald-800 border border-emerald-200';
+      } else if (l.status === 'SEDANG DIPINJAM') {
+        title = `Sedang Dipinjam: ${l.namaBarang} (${l.jumlah})`;
+        subtitle = `Dalam pemakaian oleh ${l.namaPeminjam} • Rencana kembali: ${l.tanggalRencanaKembali}`;
+        statusColor = 'bg-blue-100 text-blue-800 border border-blue-200';
+      } else if (l.status === 'SELESAI') {
+        title = `Peminjaman Selesai: ${l.namaBarang}`;
+        subtitle = `Barang telah dikembalikan oleh ${l.namaPeminjam}`;
+        statusColor = 'bg-slate-200 text-slate-800 border border-slate-300';
+      } else if (l.status === 'DITOLAK') {
+        title = `Peminjaman Ditolak: ${l.namaBarang}`;
+        subtitle = `Ditolak oleh ${l.persetujuanOleh || 'Sarpras'} • ${l.namaPeminjam}`;
+        statusColor = 'bg-red-100 text-red-800 border border-red-200';
+      }
+
       activities.push({
         id: `act-ln-${l.id}`,
         type: 'peminjaman',
         refId: l.id,
-        timestamp: l.timestamp,
-        timeFormatted,
-        title: `Peminjaman: ${l.namaBarang} (${l.jumlah})`,
-        subtitle: `${l.namaPeminjam} (${l.kelasUnit || l.statusPeminjam}) • Tgl Pinjam: ${l.tanggalPinjam}`,
+        timestamp: effectiveTime,
+        timeFormatted: formatFriendlyTime(effectiveTime),
+        title,
+        subtitle,
         statusBadge: l.status,
-        statusColor: l.status === 'SELESAI' ? 'bg-slate-200 text-slate-800' : l.status === 'SEDANG DIPINJAM' ? 'bg-blue-100 text-blue-800' : l.status === 'DISETUJUI' ? 'bg-emerald-100 text-emerald-800' : l.status === 'DITOLAK' ? 'bg-red-100 text-red-800' : 'bg-amber-100 text-amber-800',
+        statusColor,
       });
+
+      // Preserve initial loan request entry if status updated later
+      if (l.updatedAt && l.updatedAt !== l.timestamp) {
+        activities.push({
+          id: `act-ln-init-${l.id}`,
+          type: 'peminjaman',
+          refId: l.id,
+          timestamp: l.timestamp,
+          timeFormatted: formatFriendlyTime(l.timestamp),
+          title: `Pengajuan Pinjam: ${l.namaBarang} (${l.jumlah})`,
+          subtitle: `${l.namaPeminjam} (${l.kelasUnit || l.statusPeminjam}) • Tgl Pinjam: ${l.tanggalPinjam}`,
+          statusBadge: 'MENUNGGU',
+          statusColor: 'bg-slate-100 text-slate-600 border border-slate-200',
+        });
+      }
     });
 
     returns.forEach(r => {
-      const date = new Date(r.timestamp);
-      const timeFormatted = isNaN(date.getTime()) ? 'Baru saja' : `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
       activities.push({
         id: `act-rt-${r.id}`,
         type: 'pengembalian',
         refId: r.id,
         timestamp: r.timestamp,
-        timeFormatted,
+        timeFormatted: formatFriendlyTime(r.timestamp),
         title: `Pengembalian: ${r.namaBarang}`,
-        subtitle: `Oleh ${r.namaPeminjam} • Kondisi: ${r.kondisiBarang}`,
+        subtitle: `Oleh ${r.namaPeminjam} • Kondisi: ${r.kondisiBarang}${r.catatan ? ` • "${r.catatan}"` : ''}`,
         statusBadge: `Kondisi: ${r.kondisiBarang}`,
-        statusColor: r.kondisiBarang === 'Baik' ? 'bg-emerald-100 text-emerald-800' : r.kondisiBarang === 'Ada kerusakan' ? 'bg-amber-100 text-amber-800' : 'bg-rose-100 text-rose-800',
+        statusColor: r.kondisiBarang === 'Baik' ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : r.kondisiBarang === 'Ada kerusakan' ? 'bg-amber-100 text-amber-800 border border-amber-200' : 'bg-rose-100 text-rose-800 border border-rose-200',
       });
     });
 
-    // Sort by timestamp descending
-    return activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 10);
+    // Sort by timestamp descending (latest action/update always on top)
+    return activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 15);
   },
 
   // Clear all local & remote data

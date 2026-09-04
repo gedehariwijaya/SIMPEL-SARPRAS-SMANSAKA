@@ -32,15 +32,19 @@ export default function App() {
     const d = StorageService.getDamageReports();
     const l = StorageService.getLoans();
     const r = StorageService.getReturns();
-    const a = StorageService.getRecentActivities();
     const c = StorageService.getConfig();
 
     setDamageReports(d);
     setLoans(l);
     setReturns(r);
-    setActivities(a);
+    setActivities(StorageService.getRecentActivities(d, l, r));
     setConfig(c);
   };
+
+  // Keep activities strictly synchronized whenever damageReports, loans, or returns change
+  useEffect(() => {
+    setActivities(StorageService.getRecentActivities(damageReports, loans, returns));
+  }, [damageReports, loans, returns]);
 
   useEffect(() => {
     loadAllData();
@@ -55,7 +59,6 @@ export default function App() {
         if (reports) {
           setDamageReports(reports);
           StorageService.setDamageReports(reports);
-          setActivities(StorageService.getRecentActivities());
         }
       });
 
@@ -63,7 +66,6 @@ export default function App() {
         if (itemLoans) {
           setLoans(itemLoans);
           StorageService.setLoans(itemLoans);
-          setActivities(StorageService.getRecentActivities());
         }
       });
 
@@ -71,7 +73,6 @@ export default function App() {
         if (itemReturns) {
           setReturns(itemReturns);
           StorageService.setReturns(itemReturns);
-          setActivities(StorageService.getRecentActivities());
         }
       });
     }

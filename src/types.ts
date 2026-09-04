@@ -22,6 +22,7 @@ export interface DamageReport {
   status: DamageStatus; // STATUS
   catatanPetugas?: string; // CATATAN_PETUGAS
   tanggalSelesai?: string; // TANGGAL_SELESAI
+  updatedAt?: string; // TIMESTAMP_UPDATE (Waktu perubahan status)
 }
 
 export interface ItemLoan {
@@ -41,6 +42,7 @@ export interface ItemLoan {
   status: LoanStatus; // STATUS
   persetujuanOleh?: string;
   tanggalDisetujui?: string;
+  updatedAt?: string; // TIMESTAMP_UPDATE (Waktu perubahan status)
 }
 
 export interface ItemReturn {

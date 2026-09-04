@@ -70,15 +70,15 @@
   },
   "firestore": {
     "damageReports": {
-      "entity": "DamageReport",
+      "schema": "DamageReport",
       "description": "Koleksi data laporan kerusakan fasilitas"
     },
     "itemLoans": {
-      "entity": "ItemLoan",
+      "schema": "ItemLoan",
       "description": "Koleksi data peminjaman sarana prasarana"
     },
     "itemReturns": {
-      "entity": "ItemReturn",
+      "schema": "ItemReturn",
       "description": "Koleksi data pengembalian sarana"
     }
   }

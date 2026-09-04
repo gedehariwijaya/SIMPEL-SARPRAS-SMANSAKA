@@ -262,7 +262,10 @@ export const QuickHome: React.FC<QuickHomeProps> = ({
               Aktivitas Terbaru Sarpras
             </h3>
           </div>
-          <span className="text-xs text-slate-400 font-bold bg-slate-100 px-2.5 py-1 rounded-full">Real-time log</span>
+          <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700 font-bold bg-emerald-50 border border-emerald-200/80 px-2.5 py-1 rounded-full">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            Real-time log
+          </span>
         </div>
 
         {activities.length === 0 ? (
@@ -271,40 +274,58 @@ export const QuickHome: React.FC<QuickHomeProps> = ({
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
-            {activities.map((act) => (
-              <div
-                key={act.id}
-                id={`activity-item-${act.refId}`}
-                onClick={() => onSelectActivity(act)}
-                className="py-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/80 px-3 rounded-2xl transition-colors cursor-pointer"
-              >
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="mt-0.5 text-lg shrink-0">
-                    {act.type === 'kerusakan' ? '🔧' : act.type === 'peminjaman' ? '📦' : '↩️'}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-xs font-bold text-slate-800 truncate">
-                        {act.title}
-                      </span>
-                      <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-md">
-                        {act.refId}
-                      </span>
-                    </div>
-                    <p className="text-xs text-slate-500 mt-0.5 truncate max-w-md sm:max-w-lg">
-                      {act.subtitle}
-                    </p>
-                  </div>
-                </div>
+            {activities.map((act) => {
+              const icon = act.title.includes('Selesai')
+                ? '✅'
+                : act.title.includes('Proses')
+                ? '🛠️'
+                : act.type === 'kerusakan'
+                ? '🔧'
+                : act.type === 'peminjaman'
+                ? '📦'
+                : '↩️';
 
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={`text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-full ${act.statusColor}`}>
-                    {act.statusBadge}
-                  </span>
-                  <ChevronRight className="w-4 h-4 text-slate-400" />
+              return (
+                <div
+                  key={act.id}
+                  id={`activity-item-${act.refId}`}
+                  onClick={() => onSelectActivity(act)}
+                  className="py-3.5 flex items-center justify-between gap-3 hover:bg-slate-50/80 px-3 rounded-2xl transition-colors cursor-pointer"
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <div className="mt-0.5 text-lg shrink-0 select-none">
+                      {icon}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-slate-800 truncate">
+                          {act.title}
+                        </span>
+                        <span className="text-[10px] font-mono font-bold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-2 py-0.5 rounded-md">
+                          {act.refId}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-0.5 truncate max-w-md sm:max-w-lg flex items-center gap-1.5">
+                        <span className="sm:hidden text-[10px] font-semibold text-slate-400 shrink-0">
+                          {act.timeFormatted} •
+                        </span>
+                        <span className="truncate">{act.subtitle}</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2.5 shrink-0">
+                    <span className="text-[11px] text-slate-400 font-medium hidden sm:inline-block whitespace-nowrap">
+                      {act.timeFormatted}
+                    </span>
+                    <span className={`text-[10px] sm:text-xs font-bold px-2.5 py-1 rounded-full whitespace-nowrap ${act.statusColor}`}>
+                      {act.statusBadge}
+                    </span>
+                    <ChevronRight className="w-4 h-4 text-slate-400" />
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

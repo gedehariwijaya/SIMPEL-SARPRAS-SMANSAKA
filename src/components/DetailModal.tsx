@@ -109,6 +109,12 @@ export const DetailModal: React.FC<DetailModalProps> = ({ item, onClose }) => {
                   <span className="text-slate-500 block">Tanggal Lapor</span>
                   <strong className="text-slate-900 font-bold">{damageData.tanggalLapor}</strong>
                 </div>
+                {damageData.tanggalSelesai && (
+                  <div className="bg-emerald-50 p-3 rounded-2xl border border-emerald-100">
+                    <span className="text-emerald-700 block font-medium">Tanggal Selesai</span>
+                    <strong className="text-emerald-900 font-bold">{damageData.tanggalSelesai}</strong>
+                  </div>
+                )}
               </div>
 
               <div className="p-4 bg-rose-50/60 rounded-2xl border border-rose-100 space-y-1">

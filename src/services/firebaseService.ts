@@ -1,11 +1,13 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 import {
+  initializeFirestore,
   getFirestore,
   Firestore,
   collection,
   doc,
   setDoc,
   getDocs,
+  getDocFromServer,
   onSnapshot,
   deleteDoc,
   query,
@@ -30,6 +32,21 @@ const DATABASE_ID = firebaseConfigData.firestoreDatabaseId || '(default)';
 
 let cachedApp: FirebaseApp | null = null;
 let cachedDb: Firestore | null = null;
+let connectionState: 'online' | 'offline' | 'connecting' = 'connecting';
+const connectionListeners: Array<(state: 'online' | 'offline' | 'connecting') => void> = [];
+
+function notifyConnection(state: 'online' | 'offline' | 'connecting') {
+  if (connectionState !== state) {
+    connectionState = state;
+    connectionListeners.forEach((fn) => {
+      try {
+        fn(state);
+      } catch (err) {
+        console.warn('Listener error:', err);
+      }
+    });
+  }
+}
 
 export const FirebaseService = {
   getStoredConfig(): FirebaseConfig {
@@ -38,6 +55,19 @@ export const FirebaseService = {
 
   isConfigured(): boolean {
     return true;
+  },
+
+  getConnectionState(): 'online' | 'offline' | 'connecting' {
+    return connectionState;
+  },
+
+  onConnectionStateChange(listener: (state: 'online' | 'offline' | 'connecting') => void): () => void {
+    connectionListeners.push(listener);
+    listener(connectionState);
+    return () => {
+      const idx = connectionListeners.indexOf(listener);
+      if (idx !== -1) connectionListeners.splice(idx, 1);
+    };
   },
 
   getDb(): Firestore | null {
@@ -50,25 +80,56 @@ export const FirebaseService = {
         cachedApp = getApp();
       }
 
-      if (DATABASE_ID && DATABASE_ID !== '(default)') {
-        cachedDb = getFirestore(cachedApp, DATABASE_ID);
-      } else {
-        cachedDb = getFirestore(cachedApp);
+      const targetDbId = DATABASE_ID && DATABASE_ID !== '(default)' ? DATABASE_ID : undefined;
+
+      // Force HTTP long-polling instead of streaming WebChannel to prevent
+      // code=unavailable connection drops behind iframe sandbox proxies
+      try {
+        cachedDb = initializeFirestore(
+          cachedApp,
+          {
+            experimentalForceLongPolling: true,
+          },
+          targetDbId
+        );
+      } catch {
+        cachedDb = getFirestore(cachedApp, targetDbId);
       }
 
       return cachedDb;
     } catch (e) {
-      console.error('Error initializing Firebase Firestore:', e);
+      console.warn('Error initializing Firebase Firestore:', e);
       try {
-        // Fallback to default firestore instance if named database fails
         if (cachedApp) {
           cachedDb = getFirestore(cachedApp);
           return cachedDb;
         }
       } catch (err) {
-        console.error('Fallback firestore init error:', err);
+        console.warn('Fallback firestore init error:', err);
       }
       return null;
+    }
+  },
+
+  /**
+   * Validate connection to Firestore backend as recommended by guidelines
+   */
+  async validateBackendConnection(): Promise<boolean> {
+    try {
+      const db = this.getDb();
+      if (!db) return false;
+      await getDocFromServer(doc(db, '_simpel_sarpras_meta', 'connection_ping'));
+      notifyConnection('online');
+      return true;
+    } catch (error: any) {
+      if (error?.code === 'unavailable' || error?.message?.includes('offline') || error?.message?.includes('network')) {
+        notifyConnection('offline');
+      } else {
+        // Any response from server (even not found) means connectivity is healthy
+        notifyConnection('online');
+        return true;
+      }
+      return false;
     }
   },
 
@@ -79,6 +140,7 @@ export const FirebaseService = {
     try {
       const db = this.getDb();
       if (!db) {
+        notifyConnection('offline');
         return {
           success: false,
           message: 'Gagal menginisialisasi database Firebase.',
@@ -93,13 +155,17 @@ export const FirebaseService = {
         version: '1.0.0',
       });
 
+      notifyConnection('online');
       return {
         success: true,
         message: `Koneksi ke Firestore Berhasil Aktif! (Project ID: ${DEFAULT_FIREBASE_CONFIG.projectId})`,
         projectId: DEFAULT_FIREBASE_CONFIG.projectId,
       };
     } catch (e: any) {
-      console.error('Firestore connection test failed:', e);
+      console.warn('Firestore connection test status:', e?.message || e);
+      if (e?.code === 'unavailable' || e?.message?.includes('offline')) {
+        notifyConnection('offline');
+      }
       return {
         success: false,
         message: `Koneksi Firestore: ${e.message || String(e)}`,
@@ -122,6 +188,7 @@ export const FirebaseService = {
       return onSnapshot(
         q,
         (snapshot) => {
+          notifyConnection('online');
           const items: DamageReport[] = [];
           snapshot.forEach((docSnap) => {
             items.push(docSnap.data() as DamageReport);
@@ -129,11 +196,15 @@ export const FirebaseService = {
           onUpdate(items);
         },
         (error) => {
-          console.error('Error on damageReports snapshot:', error);
+          if (error.code === 'unavailable' || error.message.includes('offline')) {
+            notifyConnection('offline');
+          } else {
+            console.warn('Realtime status (damageReports):', error.message || error);
+          }
         }
       );
     } catch (e) {
-      console.error('Failed to subscribe to damageReports', e);
+      console.warn('Failed to subscribe to damageReports', e);
       return null;
     }
   },
@@ -149,6 +220,7 @@ export const FirebaseService = {
       return onSnapshot(
         q,
         (snapshot) => {
+          notifyConnection('online');
           const items: ItemLoan[] = [];
           snapshot.forEach((docSnap) => {
             items.push(docSnap.data() as ItemLoan);
@@ -156,11 +228,15 @@ export const FirebaseService = {
           onUpdate(items);
         },
         (error) => {
-          console.error('Error on itemLoans snapshot:', error);
+          if (error.code === 'unavailable' || error.message.includes('offline')) {
+            notifyConnection('offline');
+          } else {
+            console.warn('Realtime status (itemLoans):', error.message || error);
+          }
         }
       );
     } catch (e) {
-      console.error('Failed to subscribe to itemLoans', e);
+      console.warn('Failed to subscribe to itemLoans', e);
       return null;
     }
   },
@@ -176,6 +252,7 @@ export const FirebaseService = {
       return onSnapshot(
         q,
         (snapshot) => {
+          notifyConnection('online');
           const items: ItemReturn[] = [];
           snapshot.forEach((docSnap) => {
             items.push(docSnap.data() as ItemReturn);
@@ -183,11 +260,15 @@ export const FirebaseService = {
           onUpdate(items);
         },
         (error) => {
-          console.error('Error on itemReturns snapshot:', error);
+          if (error.code === 'unavailable' || error.message.includes('offline')) {
+            notifyConnection('offline');
+          } else {
+            console.warn('Realtime status (itemReturns):', error.message || error);
+          }
         }
       );
     } catch (e) {
-      console.error('Failed to subscribe to itemReturns', e);
+      console.warn('Failed to subscribe to itemReturns', e);
       return null;
     }
   },
@@ -199,62 +280,117 @@ export const FirebaseService = {
   async saveDamageReport(report: DamageReport): Promise<void> {
     const db = this.getDb();
     if (!db) return;
-    const docRef = doc(db, 'damageReports', report.id);
-    await setDoc(docRef, report, { merge: true });
+    try {
+      const docRef = doc(db, 'damageReports', report.id);
+      await setDoc(docRef, report, { merge: true });
+      notifyConnection('online');
+    } catch (err: any) {
+      console.warn('Firestore write (damageReports) offline fallback:', err?.message || err);
+      if (err?.code === 'unavailable' || err?.message?.includes('offline')) {
+        notifyConnection('offline');
+      }
+    }
   },
 
   async updateDamageReport(id: string, updates: Partial<DamageReport>): Promise<void> {
     const db = this.getDb();
     if (!db) return;
-    const docRef = doc(db, 'damageReports', id);
-    await setDoc(docRef, updates, { merge: true });
+    try {
+      const docRef = doc(db, 'damageReports', id);
+      await setDoc(docRef, updates, { merge: true });
+      notifyConnection('online');
+    } catch (err: any) {
+      console.warn('Firestore update (damageReports) offline fallback:', err?.message || err);
+      if (err?.code === 'unavailable' || err?.message?.includes('offline')) {
+        notifyConnection('offline');
+      }
+    }
   },
 
   async deleteDamageReport(id: string): Promise<void> {
     const db = this.getDb();
     if (!db) return;
-    const docRef = doc(db, 'damageReports', id);
-    await deleteDoc(docRef);
+    try {
+      const docRef = doc(db, 'damageReports', id);
+      await deleteDoc(docRef);
+      notifyConnection('online');
+    } catch (err: any) {
+      console.warn('Firestore delete (damageReports) offline fallback:', err?.message || err);
+    }
   },
 
   async saveLoan(loan: ItemLoan): Promise<void> {
     const db = this.getDb();
     if (!db) return;
-    const docRef = doc(db, 'itemLoans', loan.id);
-    await setDoc(docRef, loan, { merge: true });
+    try {
+      const docRef = doc(db, 'itemLoans', loan.id);
+      await setDoc(docRef, loan, { merge: true });
+      notifyConnection('online');
+    } catch (err: any) {
+      console.warn('Firestore write (itemLoans) offline fallback:', err?.message || err);
+      if (err?.code === 'unavailable' || err?.message?.includes('offline')) {
+        notifyConnection('offline');
+      }
+    }
   },
 
   async updateLoan(id: string, updates: Partial<ItemLoan>): Promise<void> {
     const db = this.getDb();
     if (!db) return;
-    const docRef = doc(db, 'itemLoans', id);
-    await setDoc(docRef, updates, { merge: true });
+    try {
+      const docRef = doc(db, 'itemLoans', id);
+      await setDoc(docRef, updates, { merge: true });
+      notifyConnection('online');
+    } catch (err: any) {
+      console.warn('Firestore update (itemLoans) offline fallback:', err?.message || err);
+      if (err?.code === 'unavailable' || err?.message?.includes('offline')) {
+        notifyConnection('offline');
+      }
+    }
   },
 
   async deleteLoan(id: string): Promise<void> {
     const db = this.getDb();
     if (!db) return;
-    const docRef = doc(db, 'itemLoans', id);
-    await deleteDoc(docRef);
+    try {
+      const docRef = doc(db, 'itemLoans', id);
+      await deleteDoc(docRef);
+      notifyConnection('online');
+    } catch (err: any) {
+      console.warn('Firestore delete (itemLoans) offline fallback:', err?.message || err);
+    }
   },
 
   async saveReturn(returnItem: ItemReturn): Promise<void> {
     const db = this.getDb();
     if (!db) return;
-    const docRef = doc(db, 'itemReturns', returnItem.id);
-    await setDoc(docRef, returnItem, { merge: true });
+    try {
+      const docRef = doc(db, 'itemReturns', returnItem.id);
+      await setDoc(docRef, returnItem, { merge: true });
+      notifyConnection('online');
 
-    // If there is an associated loan, also update that loan's status in Firestore
-    if (returnItem.idPeminjaman) {
-      await this.updateLoan(returnItem.idPeminjaman, { status: 'SELESAI' });
+      // If there is an associated loan, also update that loan's status in Firestore
+      if (returnItem.idPeminjaman) {
+        await this.updateLoan(returnItem.idPeminjaman, { status: 'SELESAI' });
+      }
+    } catch (err: any) {
+      console.warn('Firestore write (itemReturns) offline fallback:', err?.message || err);
+      if (err?.code === 'unavailable' || err?.message?.includes('offline')) {
+        notifyConnection('offline');
+      }
     }
   },
 
   async deleteReturn(id: string): Promise<void> {
     const db = this.getDb();
     if (!db) return;
-    const docRef = doc(db, 'itemReturns', id);
-    await deleteDoc(docRef);
+    try {
+      const docRef = doc(db, 'itemReturns', id);
+      await deleteDoc(docRef);
+      notifyConnection('online');
+    } catch (err: any) {
+      console.warn('Firestore delete (itemReturns) offline fallback:', err?.message || err);
+    }
   },
 
   /**
