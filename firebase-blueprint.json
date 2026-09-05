@@ -19,6 +19,7 @@
         "status": { "type": "string", "enum": ["DILAPORKAN", "DIPROSES", "SELESAI"] },
         "catatanPetugas": { "type": "string" },
         "tanggalSelesai": { "type": "string" },
+        "updatedAt": { "type": "string" },
         "timestamp": { "type": "string" }
       },
       "required": ["id", "namaPelapor", "namaSarana", "status", "timestamp"]
@@ -43,6 +44,7 @@
         "status": { "type": "string", "enum": ["MENUNGGU", "DISETUJUI", "SEDANG DIPINJAM", "SELESAI", "DITOLAK"] },
         "persetujuanOleh": { "type": "string" },
         "tanggalDisetujui": { "type": "string" },
+        "updatedAt": { "type": "string" },
         "timestamp": { "type": "string" }
       },
       "required": ["id", "namaPeminjam", "namaBarang", "status", "timestamp"]

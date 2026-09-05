@@ -48,6 +48,18 @@ function notifyConnection(state: 'online' | 'offline' | 'connecting') {
   }
 }
 
+// Helper to remove undefined properties which cause Firestore setDoc/updateDoc to throw
+export function sanitizeForFirestore<T extends Record<string, any>>(obj: T): Record<string, any> {
+  const clean: Record<string, any> = {};
+  if (!obj) return clean;
+  for (const [key, value] of Object.entries(obj)) {
+    if (value !== undefined) {
+      clean[key] = value;
+    }
+  }
+  return clean;
+}
+
 export const FirebaseService = {
   getStoredConfig(): FirebaseConfig {
     return DEFAULT_FIREBASE_CONFIG;
@@ -183,15 +195,21 @@ export const FirebaseService = {
 
     try {
       const colRef = collection(db, 'damageReports');
-      const q = query(colRef, orderBy('timestamp', 'desc'));
 
       return onSnapshot(
-        q,
+        colRef,
         (snapshot) => {
           notifyConnection('online');
           const items: DamageReport[] = [];
           snapshot.forEach((docSnap) => {
-            items.push(docSnap.data() as DamageReport);
+            const data = docSnap.data() as DamageReport;
+            items.push({ ...data, id: data.id || docSnap.id });
+          });
+          // Sort by updatedAt or timestamp descending
+          items.sort((a, b) => {
+            const tB = new Date(b.updatedAt || b.timestamp || 0).getTime();
+            const tA = new Date(a.updatedAt || a.timestamp || 0).getTime();
+            return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
           });
           onUpdate(items);
         },
@@ -215,15 +233,20 @@ export const FirebaseService = {
 
     try {
       const colRef = collection(db, 'itemLoans');
-      const q = query(colRef, orderBy('timestamp', 'desc'));
 
       return onSnapshot(
-        q,
+        colRef,
         (snapshot) => {
           notifyConnection('online');
           const items: ItemLoan[] = [];
           snapshot.forEach((docSnap) => {
-            items.push(docSnap.data() as ItemLoan);
+            const data = docSnap.data() as ItemLoan;
+            items.push({ ...data, id: data.id || docSnap.id });
+          });
+          items.sort((a, b) => {
+            const tB = new Date(b.updatedAt || b.timestamp || 0).getTime();
+            const tA = new Date(a.updatedAt || a.timestamp || 0).getTime();
+            return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
           });
           onUpdate(items);
         },
@@ -247,15 +270,20 @@ export const FirebaseService = {
 
     try {
       const colRef = collection(db, 'itemReturns');
-      const q = query(colRef, orderBy('timestamp', 'desc'));
 
       return onSnapshot(
-        q,
+        colRef,
         (snapshot) => {
           notifyConnection('online');
           const items: ItemReturn[] = [];
           snapshot.forEach((docSnap) => {
-            items.push(docSnap.data() as ItemReturn);
+            const data = docSnap.data() as ItemReturn;
+            items.push({ ...data, id: data.id || docSnap.id });
+          });
+          items.sort((a, b) => {
+            const tB = new Date(b.timestamp || 0).getTime();
+            const tA = new Date(a.timestamp || 0).getTime();
+            return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
           });
           onUpdate(items);
         },
@@ -282,7 +310,8 @@ export const FirebaseService = {
     if (!db) return;
     try {
       const docRef = doc(db, 'damageReports', report.id);
-      await setDoc(docRef, report, { merge: true });
+      const cleanData = sanitizeForFirestore(report);
+      await setDoc(docRef, cleanData, { merge: true });
       notifyConnection('online');
     } catch (err: any) {
       console.warn('Firestore write (damageReports) offline fallback:', err?.message || err);
@@ -297,7 +326,8 @@ export const FirebaseService = {
     if (!db) return;
     try {
       const docRef = doc(db, 'damageReports', id);
-      await setDoc(docRef, updates, { merge: true });
+      const cleanData = sanitizeForFirestore(updates);
+      await setDoc(docRef, cleanData, { merge: true });
       notifyConnection('online');
     } catch (err: any) {
       console.warn('Firestore update (damageReports) offline fallback:', err?.message || err);
@@ -324,7 +354,8 @@ export const FirebaseService = {
     if (!db) return;
     try {
       const docRef = doc(db, 'itemLoans', loan.id);
-      await setDoc(docRef, loan, { merge: true });
+      const cleanData = sanitizeForFirestore(loan);
+      await setDoc(docRef, cleanData, { merge: true });
       notifyConnection('online');
     } catch (err: any) {
       console.warn('Firestore write (itemLoans) offline fallback:', err?.message || err);
@@ -339,7 +370,8 @@ export const FirebaseService = {
     if (!db) return;
     try {
       const docRef = doc(db, 'itemLoans', id);
-      await setDoc(docRef, updates, { merge: true });
+      const cleanData = sanitizeForFirestore(updates);
+      await setDoc(docRef, cleanData, { merge: true });
       notifyConnection('online');
     } catch (err: any) {
       console.warn('Firestore update (itemLoans) offline fallback:', err?.message || err);
@@ -366,7 +398,8 @@ export const FirebaseService = {
     if (!db) return;
     try {
       const docRef = doc(db, 'itemReturns', returnItem.id);
-      await setDoc(docRef, returnItem, { merge: true });
+      const cleanData = sanitizeForFirestore(returnItem);
+      await setDoc(docRef, cleanData, { merge: true });
       notifyConnection('online');
 
       // If there is an associated loan, also update that loan's status in Firestore

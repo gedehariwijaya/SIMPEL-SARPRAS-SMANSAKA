@@ -15,12 +15,17 @@ import { SchoolLogo } from './components/SchoolLogo';
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('beranda');
 
-  // Core Data state
-  const [config, setConfig] = useState<AppConfig>(StorageService.getConfig());
-  const [damageReports, setDamageReports] = useState<DamageReport[]>([]);
-  const [loans, setLoans] = useState<ItemLoan[]>([]);
-  const [returns, setReturns] = useState<ItemReturn[]>([]);
-  const [activities, setActivities] = useState<ActivityLog[]>([]);
+  // Core Data state - Hydrate immediately from StorageService on initial render
+  const [config, setConfig] = useState<AppConfig>(() => StorageService.getConfig());
+  const [damageReports, setDamageReports] = useState<DamageReport[]>(() => StorageService.getDamageReports());
+  const [loans, setLoans] = useState<ItemLoan[]>(() => StorageService.getLoans());
+  const [returns, setReturns] = useState<ItemReturn[]>(() => StorageService.getReturns());
+  const [activities, setActivities] = useState<ActivityLog[]>(() => {
+    const d = StorageService.getDamageReports();
+    const l = StorageService.getLoans();
+    const r = StorageService.getReturns();
+    return StorageService.getRecentActivities(d, l, r);
+  });
 
   // Modals state
   const [selectedDetail, setSelectedDetail] = useState<{
@@ -57,22 +62,22 @@ export default function App() {
     if (FirebaseService.isConfigured()) {
       unsubDamage = FirebaseService.subscribeDamageReports((reports) => {
         if (reports) {
-          setDamageReports(reports);
-          StorageService.setDamageReports(reports);
+          const merged = StorageService.mergeDamageReportsWithLocal(reports);
+          setDamageReports(merged);
         }
       });
 
       unsubLoans = FirebaseService.subscribeLoans((itemLoans) => {
         if (itemLoans) {
-          setLoans(itemLoans);
-          StorageService.setLoans(itemLoans);
+          const merged = StorageService.mergeLoansWithLocal(itemLoans);
+          setLoans(merged);
         }
       });
 
       unsubReturns = FirebaseService.subscribeReturns((itemReturns) => {
         if (itemReturns) {
-          setReturns(itemReturns);
-          StorageService.setReturns(itemReturns);
+          const merged = StorageService.mergeReturnsWithLocal(itemReturns);
+          setReturns(merged);
         }
       });
     }

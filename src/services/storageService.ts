@@ -142,12 +142,7 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.DAMAGE, JSON.stringify(list));
 
     if (FirebaseService.isConfigured()) {
-      FirebaseService.updateDamageReport(id, {
-        status: updatedItem.status,
-        catatanPetugas: updatedItem.catatanPetugas,
-        tanggalSelesai: updatedItem.tanggalSelesai,
-        updatedAt: nowIso,
-      }).catch(err => console.warn('Firestore update failed:', err));
+      FirebaseService.updateDamageReport(id, updatedItem).catch(err => console.warn('Firestore update failed:', err));
     }
 
     return updatedItem;
@@ -225,12 +220,7 @@ export const StorageService = {
     localStorage.setItem(STORAGE_KEYS.LOANS, JSON.stringify(list));
 
     if (FirebaseService.isConfigured()) {
-      FirebaseService.updateLoan(id, {
-        status: updatedItem.status,
-        persetujuanOleh: updatedItem.persetujuanOleh,
-        tanggalDisetujui: updatedItem.tanggalDisetujui,
-        updatedAt: nowIso,
-      }).catch(err => console.warn('Firestore loan update failed:', err));
+      FirebaseService.updateLoan(id, updatedItem).catch(err => console.warn('Firestore loan update failed:', err));
     }
 
     return updatedItem;
@@ -458,8 +448,136 @@ export const StorageService = {
       });
     });
 
+    // Helper to safely parse timestamp
+    const getTimeMs = (timeStr?: string) => {
+      if (!timeStr) return 0;
+      const t = new Date(timeStr).getTime();
+      return isNaN(t) ? 0 : t;
+    };
+
     // Sort by timestamp descending (latest action/update always on top)
-    return activities.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()).slice(0, 15);
+    return activities.sort((a, b) => getTimeMs(b.timestamp) - getTimeMs(a.timestamp)).slice(0, 20);
+  },
+
+  // Smart Sync & Merge between Firestore remote snapshots and Local Storage
+  mergeDamageReportsWithLocal(remoteReports: DamageReport[]): DamageReport[] {
+    const localReports = this.getDamageReports();
+    if (!remoteReports || remoteReports.length === 0) {
+      // If remote is empty but local has items, don't wipe local! Sync local to remote instead
+      if (localReports.length > 0 && FirebaseService.isConfigured()) {
+        localReports.forEach(item => {
+          FirebaseService.saveDamageReport(item).catch(() => {});
+        });
+      }
+      return localReports;
+    }
+
+    const mergedMap = new Map<string, DamageReport>();
+
+    // 1. Index local reports
+    localReports.forEach(item => {
+      mergedMap.set(item.id, item);
+    });
+
+    // 2. Merge remote reports, keeping whichever has the newer status/update
+    remoteReports.forEach(remote => {
+      const local = mergedMap.get(remote.id);
+      if (!local) {
+        mergedMap.set(remote.id, remote);
+      } else {
+        const localTime = new Date(local.updatedAt || local.timestamp || 0).getTime();
+        const remoteTime = new Date(remote.updatedAt || remote.timestamp || 0).getTime();
+
+        if (remoteTime >= localTime) {
+          // Remote is fresher or equal
+          mergedMap.set(remote.id, { ...local, ...remote });
+        } else {
+          // Local has a newer update (e.g. status marked 'DIPROSES' just before refresh)
+          // Keep local status and push update to Firestore
+          if (FirebaseService.isConfigured()) {
+            FirebaseService.updateDamageReport(local.id, local).catch(() => {});
+          }
+        }
+      }
+    });
+
+    const result = Array.from(mergedMap.values()).sort((a, b) => {
+      const tB = new Date(b.updatedAt || b.timestamp || 0).getTime();
+      const tA = new Date(a.updatedAt || a.timestamp || 0).getTime();
+      return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+    });
+
+    this.setDamageReports(result);
+    return result;
+  },
+
+  mergeLoansWithLocal(remoteLoans: ItemLoan[]): ItemLoan[] {
+    const localLoans = this.getLoans();
+    if (!remoteLoans || remoteLoans.length === 0) {
+      if (localLoans.length > 0 && FirebaseService.isConfigured()) {
+        localLoans.forEach(item => {
+          FirebaseService.saveLoan(item).catch(() => {});
+        });
+      }
+      return localLoans;
+    }
+
+    const mergedMap = new Map<string, ItemLoan>();
+    localLoans.forEach(item => mergedMap.set(item.id, item));
+
+    remoteLoans.forEach(remote => {
+      const local = mergedMap.get(remote.id);
+      if (!local) {
+        mergedMap.set(remote.id, remote);
+      } else {
+        const localTime = new Date(local.updatedAt || local.timestamp || 0).getTime();
+        const remoteTime = new Date(remote.updatedAt || remote.timestamp || 0).getTime();
+        if (remoteTime >= localTime) {
+          mergedMap.set(remote.id, { ...local, ...remote });
+        } else {
+          if (FirebaseService.isConfigured()) {
+            FirebaseService.updateLoan(local.id, local).catch(() => {});
+          }
+        }
+      }
+    });
+
+    const result = Array.from(mergedMap.values()).sort((a, b) => {
+      const tB = new Date(b.updatedAt || b.timestamp || 0).getTime();
+      const tA = new Date(a.updatedAt || a.timestamp || 0).getTime();
+      return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+    });
+
+    this.setLoans(result);
+    return result;
+  },
+
+  mergeReturnsWithLocal(remoteReturns: ItemReturn[]): ItemReturn[] {
+    const localReturns = this.getReturns();
+    if (!remoteReturns || remoteReturns.length === 0) {
+      if (localReturns.length > 0 && FirebaseService.isConfigured()) {
+        localReturns.forEach(item => {
+          FirebaseService.saveReturn(item).catch(() => {});
+        });
+      }
+      return localReturns;
+    }
+
+    const mergedMap = new Map<string, ItemReturn>();
+    localReturns.forEach(item => mergedMap.set(item.id, item));
+
+    remoteReturns.forEach(remote => {
+      mergedMap.set(remote.id, remote);
+    });
+
+    const result = Array.from(mergedMap.values()).sort((a, b) => {
+      const tB = new Date(b.timestamp || 0).getTime();
+      const tA = new Date(a.timestamp || 0).getTime();
+      return (isNaN(tB) ? 0 : tB) - (isNaN(tA) ? 0 : tA);
+    });
+
+    this.setReturns(result);
+    return result;
   },
 
   // Clear all local & remote data
